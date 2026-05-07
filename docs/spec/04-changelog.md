@@ -43,6 +43,7 @@
 - `render/DebugImageRenderer` — Debug 渲染器空实现
 - `render/RendererFactory` — 渲染器工厂
 - `shaders/` 目录占位
+- `scripts/build.sh` — 一键 CMake 构建脚本
 
 ### Changed
 
@@ -58,7 +59,9 @@
 - 无实际播放能力，UI 控件为占位状态
 - 无 FFmpeg 集成
 - ControlBar 按钮可点击，无实际播放逻辑
-- 进度条保持 disabled 状态（无可播放媒体）
+- 进度条当前为可交互占位（未绑定播放状态）
+- 本地构建验证受环境限制：当前机器未配置 Qt6 CMake 包（`Qt6Config.cmake` 不可见）
+- 可执行文件目标输出目录约定为项目根 `bin/`
 
 ---
 
