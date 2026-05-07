@@ -22,7 +22,9 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     connect(progressSlider_, &QSlider::valueChanged, this, &ControlBar::onSliderChanged);
 }
 
-void ControlBar::onOpenClicked() {}
+void ControlBar::onOpenClicked() {
+    emit openRequested();
+}
 
 void ControlBar::onPlayClicked() {}
 

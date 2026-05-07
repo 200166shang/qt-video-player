@@ -44,6 +44,10 @@ target_link_libraries(playerlab_config PUBLIC
 target_include_directories(playerlab_config PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 add_library(playerlab_ffmpeg STATIC
+    src/ffmpeg/FFmpegGlobal.h
+    src/ffmpeg/FFmpegGlobal.cpp
+    src/ffmpeg/FFmpegDemuxer.h
+    src/ffmpeg/FFmpegDemuxer.cpp
     src/ffmpeg/FFmpegProbe.h
     src/ffmpeg/FFmpegProbe.cpp
 )
@@ -59,6 +63,10 @@ target_include_directories(playerlab_ffmpeg PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 add_executable(playerlab
     src/main.cpp
+    src/core/MediaInfo.h
+    src/core/MediaSource.h
+    src/core/PlayerController.h
+    src/core/PlayerController.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/Sidebar.h

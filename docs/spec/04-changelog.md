@@ -104,6 +104,43 @@
 
 ---
 
+## Iteration 03: Media Info Reader
+
+### Date
+
+2026-05-08
+
+### Summary
+
+实现本地媒体文件打开与 FFmpeg 媒体信息读取链路，UI 可展示容器/视频/音频信息并显示打开错误。
+
+### Added
+
+- `src/core/MediaSource.h`（本地媒体源抽象）
+- `src/core/MediaInfo.h`（媒体信息数据结构）
+- `src/core/PlayerController.*`（统一打开入口与 UI 通知）
+- `src/ffmpeg/FFmpegGlobal.*`（FFmpeg 全局初始化）
+- `src/ffmpeg/FFmpegDemuxer.*`（本地文件打开与流信息读取）
+
+### Changed
+
+- `src/ui/ControlBar.*` 增加 `openRequested` 信号，Open 按钮可触发上层打开流程
+- `src/ui/MainWindow.*` 串联 `ControlBar -> PlayerController -> MediaInfoPanel`
+- `src/ui/MediaInfoPanel.*` 从静态占位改为动态显示文件路径、格式、时长、视频和音频信息，并支持错误提示
+- `CMakeLists.txt` 纳入 iteration 03 新增模块文件
+
+### Fixed
+
+- 修复 FFmpeg 帧率读取时 `av_guess_frame_rate` 的参数 const 不匹配编译问题
+
+### Notes
+
+- 本迭代仅实现媒体信息读取，不包含视频播放、音频播放、seek
+- 验证通过：`cmake --build build -j8` 成功
+- `scripts/build.sh` 仍存在现有 Conan profile `gnu17` 与 `C++20` 要求冲突问题（与本迭代功能无关）
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

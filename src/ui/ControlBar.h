@@ -11,6 +11,9 @@ class ControlBar : public QWidget {
 public:
     explicit ControlBar(QWidget* parent = nullptr);
 
+signals:
+    void openRequested();
+
 private slots:
     void onOpenClicked();
     void onPlayClicked();

@@ -1,8 +1,10 @@
 #include "MainWindow.h"
 
+#include <QFileDialog>
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include "core/PlayerController.h"
 #include "ControlBar.h"
 #include "MediaInfoPanel.h"
 #include "MediaLibraryWidget.h"
@@ -43,23 +45,34 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     centerLayout->addWidget(videoWidget, 1);
     centerLayout->addWidget(mediaLibrary);
 
-    auto* rightPanel = new MediaInfoPanel(this);
-    rightPanel->setMinimumWidth(230);
-    rightPanel->setMaximumWidth(350);
+    mediaInfoPanel_ = new MediaInfoPanel(this);
+    mediaInfoPanel_->setMinimumWidth(230);
+    mediaInfoPanel_->setMaximumWidth(350);
 
     mainSplitter->addWidget(sidebar);
     mainSplitter->addWidget(centerContainer);
-    mainSplitter->addWidget(rightPanel);
+    mainSplitter->addWidget(mediaInfoPanel_);
     mainSplitter->setStretchFactor(0, 0);
     mainSplitter->setStretchFactor(1, 1);
     mainSplitter->setStretchFactor(2, 0);
 
-    auto* controlBar = new ControlBar(this);
-    controlBar->setFixedHeight(56);
+    controlBar_ = new ControlBar(this);
+    controlBar_->setFixedHeight(56);
 
     rootLayout->addWidget(topBar);
     rootLayout->addWidget(mainSplitter, 1);
-    rootLayout->addWidget(controlBar);
+    rootLayout->addWidget(controlBar_);
+
+    playerController_ = new playerlab::core::PlayerController(this);
+    connect(controlBar_, &ControlBar::openRequested, this, &MainWindow::onOpenRequested);
+    connect(playerController_, &playerlab::core::PlayerController::mediaInfoChanged, this,
+            [this](const playerlab::core::MediaInfo& info) {
+                mediaInfoPanel_->setMediaInfo(info);
+            });
+    connect(playerController_, &playerlab::core::PlayerController::openFailed, this,
+            [this](const QString& error) {
+                mediaInfoPanel_->setError(error);
+            });
 
     setStyleSheet(
         "QWidget { background: #1a1d21; color: #e6e8ea; }"
@@ -69,4 +82,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         "QSlider::groove:horizontal { height: 4px; background: #3a4654; }"
         "QSlider::handle:horizontal { background: #c9d7ea; width: 12px; margin: -6px 0; border-radius: 6px; }"
     );
+}
+
+void MainWindow::onOpenRequested() {
+    const QString filter = "Media Files (*.mp4 *.mkv *.mov);;All Files (*)";
+    const QString filePath = QFileDialog::getOpenFileName(this, "Open Media File", QString(), filter);
+    if (filePath.isEmpty()) {
+        return;
+    }
+    playerController_->open(filePath);
 }
