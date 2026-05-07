@@ -1,0 +1,2085 @@
+# PlayerLab 项目文档（会话版）
+
+> 以下是 `docs/` 目录下所有文档的完整内容，按文件组织整理，方便直接复制发送给会话。
+
+---
+
+## 目录结构
+
+```
+docs/
+└── spec/
+    ├── README.md                        # Spec 体系入口，定义阅读顺序与执行流程
+    ├── 00-overview.md                   # 项目概览：定位、技术栈、开发顺序
+    ├── 01-architecture.md               # 架构契约：模块边界、依赖方向、核心抽象
+    ├── 02-roadmap.md                    # 路线图：全部 14 个迭代的定义与优先级
+    ├── 03-adr.md                        # 架构决策记录模板与规则
+    ├── 04-changelog.md                  # 变更日志：已完成的迭代记录
+    └── iterations/
+        ├── TEMPLATE.md                  # 迭代 spec 模板
+        ├── iter-01-bootstrap-ui-opengl.md
+        ├── iter-02-conan-cmake-dependencies.md
+        ├── iter-03-media-info.md
+        ├── iter-04-video-decode-opengl-render.md
+        ├── iter-05-audio-output.md
+        ├── iter-06-av-sync.md
+        ├── iter-07-playback-control.md
+        ├── iter-08-network-playback.md
+        ├── iter-09-playlist-config.md
+        ├── iter-10-subtitle-srt.md
+        ├── iter-11-player-tools.md
+        ├── iter-12-performance-hwaccel-interface.md
+        ├── iter-13-optional-extensions.md
+        └── iter-14-packaging.md
+```
+
+---
+
+## docs/spec/README.md
+
+PlayerLab Spec 索引
+
+## 1. 目的
+
+本目录包含 PlayerLab 的开发规范。
+
+PlayerLab 是一个 PC 媒体播放器项目，技术栈：
+
+- Qt
+- FFmpeg
+- OpenGL
+- CMake
+- Conan
+
+项目通过 AI 辅助工作流（Claude Code / Codex）迭代开发。
+
+本 README 定义：
+
+- 如何阅读 spec
+- 如何执行迭代
+- 如何修改 spec
+- 如何更新 roadmap / ADR / changelog
+
+**Claude Code 执行任何任务前必须先阅读本文件。**
+
+---
+
+## 2. Spec 目录结构
+
+```text
+docs/spec/
+├── README.md
+├── 01-architecture-contract.md
+├── 02-roadmap.md
+├── 03-adr.md
+├── 04-changelog.md
+└── iterations/
+    ├── TEMPLATE.md
+    └── iter-xx-xxx.md
+```
+
+## 3. 文件职责
+
+### README.md
+
+spec 体系的入口文件。
+
+定义：
+
+- 阅读顺序
+- 执行流程
+- 更新流程
+- spec 规则
+
+### 01-architecture-contract.md
+
+定义架构边界与核心约束。
+
+包含：
+
+- 模块边界
+- 依赖方向
+- 禁止行为
+- 核心抽象
+- 线程原则
+
+本文件极少变更。每次迭代前必须阅读。
+
+### 02-roadmap.md
+
+定义当前项目方向。
+
+包含：
+
+- 迭代顺序
+- 高层目标
+- 当前优先级
+
+Roadmap 允许变更。不要把 roadmap 视为固定不变的长期承诺。
+
+### 03-adr.md
+
+ADR 即架构决策记录。
+
+用于记录：
+
+- 架构为何变更
+- 为何新增依赖
+- 为何技术路线变化
+- 为何进行重构
+
+重要的架构变更必须先更新 ADR。ADR 仅追加。
+
+### 04-changelog.md
+
+记录已完成的迭代结果。
+
+包含：
+
+- 实现了什么
+- 变更了什么
+- 修复了什么
+- 已知限制
+
+只有已完成的迭代才应出现在这里。
+
+### iterations/TEMPLATE.md
+
+所有未来迭代的模板。新迭代应从此模板创建。
+
+### iterations/iter-xx-xxx.md
+
+定义具体的实现任务。
+
+包含：
+
+- 目标
+- 背景
+- 范围
+- 不在范围内
+- 约束
+- 任务
+- 最小接口草案
+- 验收标准
+- 风险
+- 完成记录
+
+只有当前迭代需要详细展开，未来迭代可保持粗略。
+
+---
+
+## 4. 必要阅读顺序
+
+执行任何迭代前，按顺序阅读：
+
+1. `docs/spec/README.md`
+2. `docs/spec/01-architecture-contract.md`
+3. `docs/spec/02-roadmap.md`
+4. `docs/spec/iterations/` 下当前迭代的 spec
+
+如果架构方向变更，阅读并更新：
+
+- `docs/spec/03-adr.md`
+
+迭代完成后，更新：
+
+- `docs/spec/04-changelog.md`
+
+---
+
+## 5. 执行流程
+
+每个迭代：
+
+1. 阅读 spec 索引
+2. 阅读架构契约
+3. 阅读 roadmap
+4. 阅读当前迭代 spec
+5. 检查当前项目状态
+6. 输出实现计划
+7. 仅实现当前迭代
+8. 构建项目
+9. 验证验收标准
+10. 更新 changelog
+
+---
+
+## 6. Spec 更新流程
+
+### 6.1 仅当前任务发生变更
+
+更新当前迭代 spec。
+
+示例：
+
+- 调整当前任务范围
+- 简化当前实现
+- 调整临时策略
+
+### 6.2 未来迭代顺序变更
+
+更新：
+
+- `docs/spec/02-roadmap.md`
+
+示例：
+
+- 字幕迭代提前
+- 网络播放延后
+- 插入渲染器重构迭代
+
+### 6.3 架构方向变更
+
+先更新：
+
+- `docs/spec/03-adr.md`
+
+再根据需要更新：
+
+- `docs/spec/01-architecture-contract.md`
+- `docs/spec/02-roadmap.md`
+- 当前迭代 spec
+
+示例：
+
+- 渲染架构变更
+- 替换音频后端
+- 依赖管理策略变更
+- 播放管线结构调整
+
+### 6.4 迭代完成后
+
+更新：
+
+- `docs/spec/04-changelog.md`
+
+记录：
+
+- 实际实现
+- 变更
+- 修复
+- 已知问题
+
+---
+
+## 7. AI 执行规则
+
+Claude Code / Codex 必须遵守以下规则。
+
+### 7.1 禁止提前实现未来迭代
+
+除非当前迭代明确要求，否则不得添加高级功能。
+
+未来功能示例：
+
+- 硬件加速
+- libass
+- 高级渲染器
+- 高级调度器
+- 高级字幕系统
+- 完整媒体库
+
+### 7.2 保持架构边界清晰
+
+禁止：
+
+- 将播放逻辑写入 MainWindow
+- 让 UI 包含 FFmpeg 头文件
+- 让 UI 直接控制解码器
+- 让 UI 直接操作 packet/frame 队列
+- 将所有播放逻辑堆在一个大文件里
+
+### 7.3 保持 OpenGL 为渲染主方向
+
+允许调试路径。但最终渲染架构必须保留：
+
+- 渲染器抽象
+- OpenGL 渲染器
+- 纹理上传通路
+- shader 管线方向
+
+### 7.4 保持迭代可构建
+
+每个迭代结束时必须处于以下状态：
+
+- 可编译
+- 可运行
+- 可验证
+
+### 7.5 实现与 spec 冲突时
+
+不要悄悄绕过 spec，而应：
+
+1. 暂停实现
+2. 说明冲突
+3. 更新当前迭代 spec 或 ADR
+4. 继续实现
+
+---
+
+## 8. 当前优先级
+
+**当前活跃迭代：** Iteration 01 — Bootstrap UI + OpenGL Placeholder
+
+**当前短期目标：**
+
+- 建立稳定的项目结构
+- 创建 Qt 主 UI
+- 创建 OpenGL 视频占位控件
+- 引入渲染器抽象
+- 为 FFmpeg 集成做准备
+
+---
+
+## docs/spec/00-overview.md
+
+# 00 - 项目概览
+
+## 0. 项目定位
+
+### 0.1 项目名称
+
+```text
+PlayerLab
+```
+
+### 0.2 项目目标
+
+开发一个基于 **Qt + FFmpeg + OpenGL** 的 PC 桌面播放器工具。
+
+它不是一次性 Demo，而是一个可持续演进的播放器工程，目标是支持：
+
+```text
+1. 本地视频播放
+2. 网络视频播放
+3. 音视频同步
+4. 播放列表
+5. 媒体信息查看
+6. 字幕显示
+7. OpenGL 视频渲染
+8. 播放控制
+9. 截图、全屏、单帧步进
+10. 后续扩展硬解码、libass 字幕、OpenAL 音频、OpenCV 工具能力
+```
+
+---
+
+# 1. 核心技术栈
+
+## 1.1 第一阶段必选技术栈
+
+```text
+C++20
+Qt 6 Widgets
+Qt OpenGL / QOpenGLWidget
+FFmpeg
+OpenGL
+CMake
+Conan 2.x
+spdlog
+fmt
+nlohmann_json
+stb
+```
+
+## 1.2 第一阶段暂不强制实现，但需要预留接口
+
+```text
+libass
+OpenAL Soft
+OpenCV
+SQLite
+FFmpeg avfilter
+FFmpeg hwaccel
+```
+
+## 1.3 技术选型原则
+
+```text
+1. Qt 负责 UI 和桌面应用框架。
+2. FFmpeg 负责解封装、解码、网络流读取、音频重采样、像素格式处理。
+3. OpenGL 是核心视频渲染后端，不是后续可选优化项。
+4. 播放核心不依赖 UI 具体控件。
+5. UI 不直接调用 FFmpeg API。
+6. 所有底层能力通过 core/controller 层暴露给 UI。
+7. 第三方库优先通过 Conan 管理。
+8. Qt 优先通过系统安装或 Qt 官方安装器接入，不强制用 Conan 管理。
+```
+
+---
+
+# 10. 第一阶段开发顺序建议
+
+最推荐你现在从这三个迭代开始：
+
+```text
+Iteration 01：项目骨架 + Qt UI + OpenGL 占位
+Iteration 02：Conan + CMake + 基础依赖接入
+Iteration 03：媒体信息读取
+```
+
+这三个完成后，项目就从"空 UI"变成了一个有工程骨架、有依赖管理、有 FFmpeg 接入、有 OpenGL 渲染占位、有媒体信息能力的播放器基础工程。
+
+然后再进入真正的播放链路：
+
+```text
+Iteration 04：视频软解码 + OpenGL 渲染
+Iteration 05：音频输出
+Iteration 06：音视频同步
+```
+
+这个顺序比较稳，不容易让 AI 一开始把项目写成一个不可维护的大 Demo。
+
+---
+
+## docs/spec/01-architecture.md
+
+# PlayerLab Architecture Contract
+
+## 1. 目标
+
+本文档定义 PlayerLab 的核心架构边界。
+
+这些规则用于防止项目在迭代过程中逐渐退化成：
+
+- MainWindow 巨石类
+- UI 与 FFmpeg 强耦合
+- OpenGL 后补丁式接入
+- 解码 / 渲染 / 音频职责混乱
+- 不可维护的播放器 demo
+
+如果后续发现某些设计需要改变：
+
+1. 先更新 ADR
+2. 再修改本文件
+3. 再调整 roadmap / iteration
+
+---
+
+# 2. 架构原则
+
+## 2.1 UI 与播放核心解耦
+
+UI 只负责：
+
+- 界面展示
+- 用户输入
+- 状态展示
+- 调用播放器控制接口
+
+UI 不负责：
+
+- 解封装
+- 解码
+- OpenGL shader 逻辑
+- 音视频同步
+- packet/frame 调度
+
+---
+
+## 2.2 OpenGL 是主渲染方向
+
+项目的视频渲染必须围绕 OpenGL 设计。
+
+允许：
+
+- DebugImageRenderer
+- QImage fallback
+- RGB 临时调试路径
+
+但这些只能作为：
+
+- fallback
+- debug
+- 临时验证
+
+不能成为最终主路径。
+
+播放器最终必须保留：
+
+- renderer abstraction
+- OpenGL renderer
+- shader pipeline
+- texture upload path
+
+---
+
+## 2.3 FFmpeg 集中管理
+
+FFmpeg 相关代码必须集中在 ffmpeg 模块。
+
+包括：
+
+- demux
+- decode
+- resample
+- scaler
+- network init
+- media info
+- packet/frame handling
+
+禁止 UI 直接依赖 FFmpeg。
+
+---
+
+## 2.4 播放控制统一入口
+
+UI 必须通过统一控制入口控制播放器。
+
+项目必须存在：
+
+- PlayerController
+
+UI 不允许：
+
+- 直接操作 decoder
+- 直接操作 packet queue
+- 直接操作 AVFormatContext
+- 直接操作 render queue
+
+---
+
+## 2.5 模块边界清晰
+
+项目至少需要以下模块边界：
+
+- ui
+- core
+- ffmpeg
+- render
+- audio
+- subtitle
+- playlist
+- config
+- utils
+
+允许后续调整内部结构。
+
+但不允许：
+
+- 所有代码堆在 ui
+- 所有代码堆在 mainwindow
+- 所有代码堆在 player.cpp
+
+---
+
+## 2.6 本地与网络媒体统一抽象
+
+本地文件与网络 URL 必须统一表达为媒体源概念。
+
+项目需要保留：
+
+- MediaSource
+
+但具体字段与接口可以后续调整。
+
+---
+
+## 2.7 渲染与音频必须可替换
+
+视频渲染必须具备 renderer abstraction。
+
+音频输出必须具备 audio output abstraction。
+
+项目需要保留：
+
+- IVideoRenderer
+- IAudioOutput
+
+但具体接口签名不要求现在完全固定。
+
+---
+
+## 2.8 配置与播放列表独立于 UI
+
+配置、最近打开、播放列表不应该散落在 UI 代码中。
+
+需要独立模块：
+
+- config
+- playlist
+
+---
+
+## 2.9 每个迭代必须可运行
+
+每个 iteration 结束后：
+
+- 必须能编译
+- 必须能运行
+- 必须能验证结果
+
+不允许长期处于：
+
+- 半完成状态
+- 无法启动状态
+- 大面积 TODO 状态
+
+---
+
+# 3. 模块职责
+
+## 3.1 UI
+
+负责：
+
+- MainWindow
+- 控件布局
+- 用户输入
+- 状态展示
+- 进度展示
+- 媒体信息展示
+
+禁止：
+
+- include FFmpeg headers
+- 写解码循环
+- 写 packet/frame queue
+- 写音视频同步逻辑
+- 写 OpenGL shader 逻辑
+
+---
+
+## 3.2 Core
+
+负责：
+
+- 播放状态
+- 播放控制
+- 播放流程协调
+- 状态通知
+- 生命周期管理
+
+---
+
+## 3.3 FFmpeg
+
+负责：
+
+- 打开媒体
+- 解封装
+- 解码
+- 重采样
+- 像素格式转换
+- 网络初始化
+- 媒体信息读取
+
+---
+
+## 3.4 Render
+
+负责：
+
+- 视频帧显示
+- OpenGL 渲染
+- texture upload
+- shader pipeline
+- renderer switch
+
+---
+
+## 3.5 Audio
+
+负责：
+
+- PCM 输出
+- 音量
+- 静音
+- 音频播放进度
+
+---
+
+## 3.6 Subtitle
+
+负责：
+
+- subtitle parsing
+- subtitle timing
+- subtitle render
+
+---
+
+## 3.7 Playlist
+
+负责：
+
+- playlist items
+- recent files
+- next / previous item logic
+
+---
+
+## 3.8 Config
+
+负责：
+
+- app config
+- persistent settings
+- renderer/audio backend selection
+- playback preferences
+
+---
+
+# 4. 关键抽象（仅固定名字与方向）
+
+项目需要保留以下关键抽象。
+
+允许后续调整接口。
+
+- MediaSource
+- PlayerController
+- PlaybackEngine
+- MediaInfo
+- VideoFrame
+- AudioFrame
+- PlaybackClock
+- AVSynchronizer
+- IVideoRenderer
+- IAudioOutput
+
+---
+
+# 5. 依赖方向
+
+允许：
+
+UI -> Core
+
+Core -> FFmpeg
+Core -> Render
+Core -> Audio
+Core -> Subtitle
+Core -> Playlist
+Core -> Config
+
+禁止：
+
+UI -> FFmpeg
+UI -> Decoder
+UI -> PacketQueue
+UI -> FrameQueue
+
+Render -> UI business logic
+Audio -> UI business logic
+
+---
+
+# 6. 依赖管理
+
+第三方依赖优先通过：
+
+- Conan 2.x
+- CMake
+
+管理。
+
+Qt 使用系统安装或 Qt 官方安装器。
+
+不强制通过 Conan 管理 Qt。
+
+---
+
+# 7. 线程原则
+
+UI 线程只负责 UI。
+
+解码、音频输出、同步、渲染调度不应该长期阻塞 UI。
+
+播放器关闭时必须安全退出后台线程。
+
+---
+
+# 8. 变更规则
+
+如果后续需要调整：
+
+- 架构边界
+- 模块职责
+- 渲染主方向
+- 播放控制方式
+- 依赖管理方式
+
+必须：
+
+1. 先更新 ADR
+2. 再更新本文件
+3. 再更新 roadmap / iteration
+4. 再修改代码
+
+---
+
+## docs/spec/02-roadmap.md
+
+# PlayerLab Roadmap
+
+## 1. 目的
+
+本文件定义 PlayerLab 的当前开发方向。
+
+Roadmap 允许变更。
+
+如果实际开发过程中发现：
+
+- 迭代顺序不合理
+- 复杂度超出预期
+- 架构不匹配
+- 依赖存在问题
+- 性能瓶颈
+
+可以更新 roadmap。
+
+重大方向变更应记录到 ADR。
+
+---
+
+# 2. 迭代模板
+
+## Iteration XX
+
+### 目标
+
+一句话目标。
+
+### 重点
+
+当前 iteration 的重点。
+
+### 不做
+
+当前 iteration 不做什么。
+
+### 备注
+
+可选备注。
+
+---
+
+# 3. 当前 Roadmap
+
+## Iteration 01
+
+Bootstrap UI + OpenGL Placeholder
+
+**目标：**
+
+建立 Qt 工程骨架、主窗口 UI、OpenGLVideoWidget 占位、renderer abstraction。
+
+**重点：**
+
+- Qt MainWindow
+- Sidebar
+- TopBar
+- ControlBar
+- MediaInfoPanel
+- OpenGLVideoWidget
+- IVideoRenderer
+- OpenGLVideoRenderer 占位
+- RendererFactory
+
+**不做：**
+
+- FFmpeg
+- 实际播放
+- 音频输出
+- 网络播放
+
+---
+
+## Iteration 02
+
+Conan + CMake + Dependencies
+
+**目标：**
+
+建立依赖管理与基础工程设施。
+
+**重点：**
+
+- conanfile.py
+- CMake options
+- FFmpeg
+- spdlog
+- fmt
+- nlohmann_json
+- stb
+- Logger
+- AppConfig
+
+**不做：**
+
+- 实际播放
+- 解码
+- AV sync
+
+---
+
+## Iteration 03
+
+Media Info Reader
+
+**目标：**
+
+通过 FFmpeg 打开本地媒体并读取媒体信息。
+
+**重点：**
+
+- FFmpeg 初始化
+- 打开本地文件
+- 媒体信息
+- 视频流信息
+- 音频流信息
+- UI 媒体信息展示
+
+**不做：**
+
+- 实际视频播放
+- 音频播放
+- seek
+
+---
+
+## Iteration 04
+
+Video Decode + OpenGL Render
+
+**目标：**
+
+完成最小视频播放链路。
+
+**重点：**
+
+- 视频解码
+- Packet 队列
+- Frame 队列
+- VideoFrame
+- OpenGL 渲染
+- 纹理上传
+- Shader 管线
+- 宽高比处理
+
+**说明：**
+
+允许先使用 RGB texture 路径快速验证。
+
+后续逐步演进到：
+
+- YUV420P 纹理
+- NV12
+- Shader 色域转换
+
+---
+
+## Iteration 05
+
+Audio Decode + Audio Output
+
+**目标：**
+
+完成音频播放能力。
+
+**重点：**
+
+- 音频解码
+- 重采样
+- AudioFrame
+- IAudioOutput
+- QtAudioOutput
+- 音量
+- 静音
+- 暂停/恢复
+
+---
+
+## Iteration 06
+
+Basic AV Sync
+
+**目标：**
+
+实现基础音视频同步。
+
+**重点：**
+
+- PlaybackClock
+- AVSynchronizer
+- 音频主时钟
+- 视频 PTS 调度
+- 帧延迟/丢帧策略
+
+---
+
+## Iteration 07
+
+Playback Control
+
+**目标：**
+
+补齐播放器基础控制能力。
+
+**重点：**
+
+- 播放
+- 暂停
+- 停止
+- Seek
+- 播放速度
+- 时长
+- 进度更新
+- 播放状态机
+
+---
+
+## Iteration 08
+
+Network Playback
+
+**目标：**
+
+支持网络媒体播放。
+
+**重点：**
+
+- 网络 MediaSource
+- 打开 URL 对话框
+- FFmpeg 网络初始化
+- http/https
+- hls/m3u8
+- 超时处理
+- UI 非阻塞打开
+
+---
+
+## Iteration 09
+
+Playlist + Config Persistence
+
+**目标：**
+
+实现播放列表与配置持久化。
+
+**重点：**
+
+- 播放列表
+- 最近打开
+- 应用配置
+- 播放历史
+- 自动播放下一个
+
+---
+
+## Iteration 10
+
+SRT Subtitle
+
+**目标：**
+
+支持外挂字幕。
+
+**重点：**
+
+- SRT 解析
+- 字幕时间同步
+- 字幕渲染
+- 字幕延迟
+- 基础字幕样式
+
+**不做：**
+
+- libass
+- ass/ssa
+- 内嵌字幕流选择
+
+---
+
+## Iteration 11
+
+Player Tools
+
+**目标：**
+
+完善播放器工具能力。
+
+**重点：**
+
+- 全屏
+- 截图
+- 单帧步进
+- 快捷键
+- 播放工具
+
+---
+
+## Iteration 12
+
+Performance + HWAccel Preparation
+
+**目标：**
+
+建立性能观测能力并为硬解码预留方向。
+
+**重点：**
+
+- FPS 统计
+- 丢帧统计
+- 渲染统计
+- 解码模式抽象
+- 硬解码占位
+
+**不做：**
+
+- 真正的 D3D11VA
+- 真正的 VAAPI
+- 真正的 CUDA 解码
+
+---
+
+## Iteration 13
+
+Optional Extensions
+
+**候选方向：**
+
+- libass
+- OpenAL
+- OpenCV
+- SQLite
+- avfilter
+- HDR
+- 高级像素格式
+
+**原则：**
+
+默认关闭。按需接入。不污染核心播放链路。
+
+---
+
+## Iteration 14
+
+Packaging
+
+**目标：**
+
+完成可分发桌面程序能力。
+
+**重点：**
+
+- Windows 打包
+- Qt 运行时收集
+- FFmpeg 运行时收集
+- 默认配置
+- README
+- 构建说明
+
+---
+
+# 4. 当前优先级
+
+当前优先：
+
+1. Iteration 01
+2. Iteration 02
+3. Iteration 03
+
+完成前三个 iteration 后，再根据代码状态细化 Iteration 04。
+
+---
+
+## docs/spec/03-adr.md
+
+# PlayerLab ADR
+
+ADR = Architecture Decision Record
+
+本文档用于记录：
+
+- 为什么改变架构方向
+- 为什么调整技术路线
+- 为什么引入或放弃某个依赖
+- 为什么修改核心模块边界
+
+规则：
+
+1. ADR 只追加。
+2. 不轻易删除旧 ADR。
+3. 如果旧方案废弃，可以标记 Deprecated。
+4. 重要架构变化必须先写 ADR，再改 spec。
+
+---
+
+# ADR Template
+
+## ADR-XXXX: Title
+
+### Status
+
+Proposed / Accepted / Deprecated
+
+### Context
+
+为什么需要这个决策？
+
+### Decision
+
+决定怎么做？
+
+### Consequences
+
+会影响哪些模块、迭代或接口？
+
+### Alternatives Considered
+
+考虑过哪些方案？为什么没采用？
+
+### Follow-up
+
+后续需要更新哪些 spec、roadmap 或代码？
+
+---
+
+## docs/spec/04-changelog.md
+
+# PlayerLab Changelog
+
+本文档记录：
+
+- 每个 iteration 实际完成了什么
+- 哪些模块新增
+- 哪些模块修改
+- 哪些问题被修复
+- 当前已知限制
+
+规则：
+
+1. 只记录已经完成的 iteration。
+2. 不预写未来 iteration。
+3. 每次 iteration 完成后追加。
+4. changelog 记录"结果"，不是设计讨论。
+5. changelog 不替代 ADR。
+
+---
+
+## Iteration 01: Bootstrap UI + OpenGL Placeholder
+
+### Date
+
+2026-05-07
+
+### Summary
+
+建立项目骨架、Qt 主窗口 UI、OpenGL 视频占位控件、渲染器抽象接口。
+
+### Added
+
+- CMake 项目骨架（C++20, Qt6 Widgets + OpenGLWidgets）
+- `ui/MainWindow` — 主窗口，组装全部控件
+- `ui/Sidebar` — 左侧边栏（占位）
+- `ui/TopBar` — 顶部标题栏
+- `ui/OpenGLVideoWidget` — 中央 QOpenGLWidget（纯色背景）
+- `ui/MediaLibraryWidget` — 底部媒体库区域（占位）
+- `ui/MediaInfoPanel` — 右侧媒体信息面板（占位）
+- `ui/ControlBar` — 底部控制栏（Play/Open 按钮 + 进度条）
+- `render/IVideoRenderer` — 渲染器抽象接口
+- `render/OpenGLVideoRenderer` — OpenGL 渲染器空实现（glClear）
+- `render/DebugImageRenderer` — Debug 渲染器空实现
+- `render/RendererFactory` — 渲染器工厂
+- `shaders/` 目录占位
+
+### Changed
+
+无（新项目，首次迭代）。
+
+### Fixed
+
+无。
+
+### Notes
+
+- Conan 依赖管理留待 Iteration 02
+- 无实际播放能力，UI 控件为占位状态
+- 无 FFmpeg 集成
+- ControlBar 按钮可点击，无实际播放逻辑
+- 进度条保持 disabled 状态（无可播放媒体）
+
+---
+
+# Changelog Template
+
+## Iteration XX: Title
+
+### Date
+
+YYYY-MM-DD
+
+### Summary
+
+一句话总结本 iteration 完成内容。
+
+### Added
+
+- 新增模块
+- 新增功能
+- 新增接口
+
+### Changed
+
+- 修改了什么
+- 重构了什么
+
+### Fixed
+
+- 修复了什么问题
+
+### Notes
+
+- 当前限制
+- 已知问题
+- 后续注意事项
+
+---
+
+## docs/spec/iterations/TEMPLATE.md
+
+# Iteration XX: Title
+
+## 1. Goal
+
+本 iteration 的一句话目标。
+
+例如：
+
+- 建立 OpenGL 渲染占位
+- 完成视频解码链路
+- 实现音视频同步
+- 接入网络播放
+
+---
+
+## 2. Background
+
+为什么需要这个 iteration？
+
+当前项目状态是什么？
+
+这个 iteration 在 roadmap 中处于什么位置？
+
+当前 iteration 想解决什么问题？
+
+---
+
+## 3. Scope
+
+当前 iteration 负责：
+
+- xxx
+- xxx
+- xxx
+
+这里只写本 iteration 真正负责的事情。
+
+---
+
+## 4. Not In Scope
+
+当前 iteration 明确不做：
+
+- xxx
+- xxx
+- xxx
+
+这一节非常重要。
+
+用于防止 Claude Code 提前实现未来功能。
+
+例如：
+
+- 不做 hwaccel
+- 不做 libass
+- 不做完整 subtitle system
+- 不做复杂 packet scheduler
+
+---
+
+## 5. Current Constraints
+
+当前 iteration 的约束与临时策略。
+
+例如：
+
+- 当前允许使用 RGB texture path
+- 当前不实现完整 YUV420P shader pipeline
+- 当前先使用 software decode
+- 当前先使用 QtAudioOutput
+- 当前先不处理 HDR
+
+如果后续需要重构，可以在未来 iteration 调整。
+
+---
+
+## 6. Tasks
+
+当前 iteration 的具体任务。
+
+示例：
+
+1. 创建 OpenGLVideoWidget
+2. 创建 IVideoRenderer
+3. 创建 OpenGLVideoRenderer
+4. 创建 RendererFactory
+5. 建立 UI layout
+6. 添加 OpenGL placeholder render
+
+---
+
+## 7. Minimal Interface Draft
+
+当前 iteration 需要的最小接口草案。
+
+只写：
+
+- 当前真的需要的抽象
+- 当前真的需要的方法
+- 当前真的需要的数据结构
+
+不要提前设计完整最终接口。
+
+允许后续修改。
+
+---
+
+## 8. Acceptance Criteria
+
+本 iteration 的验收标准。
+
+例如：
+
+- 项目可编译
+- OpenGLVideoWidget 显示纯色
+- Play 按钮点击不崩溃
+- UI 层没有 FFmpeg 头文件
+
+---
+
+## 9. Risks
+
+实现当前 iteration 的风险。
+
+例如：
+
+- Qt OpenGLWidget 在部分平台可能不支持多 context
+- 后续如果引入 YUV420P，shader 需要重写
+
+---
+
+## 10. Completion Record
+
+本 iteration 完成后填写。
+
+### Date
+
+YYYY-MM-DD
+
+### Summary
+
+一句话总结完成内容。
+
+### Verification
+
+确认验收标准全部满足。
+
+### Notes
+
+后续 iteration 需要注意的问题。
+
+---
+
+## docs/spec/iterations/iter-01-bootstrap-ui-opengl.md
+
+# Iteration 01：项目骨架 + Qt UI + OpenGL 占位
+
+## 目标
+
+建立项目基础结构，完成 UI 原型落地，并从第一版建立 OpenGL 渲染抽象。
+
+## 范围
+
+实现：
+
+```text
+1. CMake 项目骨架
+2. Qt MainWindow
+3. 左侧 Sidebar
+4. 顶部 TopBar
+5. 中央 OpenGLVideoWidget
+6. 下方 MediaLibraryWidget
+7. 右侧 MediaInfoPanel
+8. 底部 ControlBar
+9. IVideoRenderer 接口
+10. OpenGLVideoRenderer 空实现
+11. DebugImageRenderer 空实现
+12. RendererFactory
+13. shaders/ 目录
+```
+
+暂不实现：
+
+```text
+1. FFmpeg 解码
+2. 实际播放
+3. 音频输出
+4. 网络播放
+```
+
+## 验收标准
+
+```text
+1. 项目可以编译运行。
+2. 主窗口布局接近 UI 原型。
+3. 中央区域使用 QOpenGLWidget，而不是 QLabel。
+4. OpenGLVideoWidget 可以显示纯色背景。
+5. 播放按钮、打开按钮、进度条点击不崩溃。
+6. UI 层没有 include FFmpeg 头文件。
+```
+
+---
+
+## docs/spec/iterations/iter-02-conan-cmake-dependencies.md
+
+# Iteration 02：Conan + CMake + 基础依赖接入
+
+## 目标
+
+完成工程依赖管理，接入基础库。
+
+## 范围
+
+实现：
+
+```text
+1. conanfile.py
+2. CMake options
+3. FFmpeg 依赖接入
+4. spdlog 接入
+5. fmt 接入
+6. nlohmann_json 接入
+7. stb 接入
+8. Logger 模块
+9. AppConfig 模块
+```
+
+## 验收标准
+
+```text
+1. conan install 成功。
+2. cmake configure 成功。
+3. 项目可以链接 spdlog。
+4. 项目可以读取默认 JSON 配置。
+5. FFmpeg 头文件和库可以在 ffmpeg/ 模块中使用。
+6. UI 模块仍然不直接依赖 FFmpeg。
+```
+
+---
+
+## docs/spec/iterations/iter-03-media-info.md
+
+# Iteration 03：媒体信息读取
+
+## 目标
+
+使用 FFmpeg 打开本地媒体文件并读取媒体信息。
+
+## 范围
+
+实现：
+
+```text
+1. FFmpegGlobal 初始化
+2. FFmpegDemuxer
+3. MediaInfo 生成
+4. 打开本地文件
+5. 读取容器信息
+6. 读取视频流信息
+7. 读取音频流信息
+8. 刷新右侧 MediaInfoPanel
+```
+
+## 关键流程
+
+```text
+UI 点击打开文件
+  ↓
+PlayerController::open(MediaSource)
+  ↓
+PlaybackEngine::open()
+  ↓
+FFmpegDemuxer::open()
+  ↓
+生成 MediaInfo
+  ↓
+mediaInfoChanged()
+  ↓
+UI 刷新
+```
+
+## 验收标准
+
+```text
+1. 可以选择本地 mp4/mkv/mov 文件。
+2. 右侧可以显示文件格式、时长、分辨率、编码格式、帧率、音频采样率等。
+3. 不支持的文件会显示错误。
+4. 此阶段不要求播放画面。
+```
+
+---
+
+## docs/spec/iterations/iter-04-video-decode-opengl-render.md
+
+# Iteration 04：视频软解码 + OpenGL 渲染
+
+## 目标
+
+完成最小视频播放链路：FFmpeg 解码视频帧，OpenGL 渲染显示。
+
+## 范围
+
+实现：
+
+```text
+1. FFmpegVideoDecoder
+2. PacketQueue
+3. FrameQueue
+4. 解码线程
+5. VideoFrame 数据转换
+6. YUV420P OpenGL 三纹理上传
+7. YUV -> RGB fragment shader
+8. 保持视频宽高比显示
+```
+
+## 推荐第一版格式
+
+优先支持：
+
+```text
+YUV420P
+```
+
+后续支持：
+
+```text
+NV12
+RGB24
+RGBA
+```
+
+## 验收标准
+
+```text
+1. 本地 mp4 可以显示动态画面。
+2. 画面通过 OpenGL 渲染。
+3. UI 不明显卡死。
+4. stop 后解码线程安全退出。
+5. 切换文件不会崩溃。
+```
+
+---
+
+## docs/spec/iterations/iter-05-audio-output.md
+
+# Iteration 05：音频解码 + QtAudio 输出
+
+## 目标
+
+加入音频播放能力。
+
+## 范围
+
+实现：
+
+```text
+1. FFmpegAudioDecoder
+2. FFmpegResampler
+3. AudioFrame
+4. QtAudioOutput
+5. 音量控制
+6. 静音控制
+7. 暂停 / 恢复音频
+```
+
+## 初始输出格式
+
+统一转换为：
+
+```text
+sample_rate: 48000
+channels: stereo
+sample_format: S16 或 Float
+```
+
+## 验收标准
+
+```text
+1. 本地视频可以播放声音。
+2. 音量滑块有效。
+3. 静音按钮有效。
+4. 暂停时音频暂停。
+5. 停止时音频停止。
+```
+
+---
+
+## docs/spec/iterations/iter-06-av-sync.md
+
+# Iteration 06：音视频同步
+
+## 目标
+
+实现基础音视频同步。
+
+## 同步策略
+
+```text
+1. 有音频时，音频作为主时钟。
+2. 无音频时，系统时钟作为主时钟。
+3. 视频根据 PTS 与主时钟差值决定等待、显示或丢帧。
+```
+
+## 核心计算
+
+```text
+diff = video_pts_ms - master_clock_ms
+
+diff > threshold:
+    视频太快，等待
+
+diff < -threshold:
+    视频太慢，丢帧或立即追赶
+
+abs(diff) <= threshold:
+    正常显示
+```
+
+## 新增模块
+
+```text
+PlaybackClock
+AVSynchronizer
+```
+
+## 验收标准
+
+```text
+1. 普通 mp4 音画基本同步。
+2. 暂停恢复后仍然同步。
+3. Seek 后能重新同步。
+4. 无音频视频也能正常播放。
+```
+
+---
+
+## docs/spec/iterations/iter-07-playback-control.md
+
+# Iteration 07：播放控制
+
+## 目标
+
+补齐播放器基础控制能力。
+
+## 范围
+
+实现：
+
+```text
+1. 播放
+2. 暂停
+3. 停止
+4. Seek
+5. 进度条刷新
+6. 时长显示
+7. 当前时间显示
+8. 播放速度 0.5x / 1.0x / 1.25x / 1.5x / 2.0x
+```
+
+## 验收标准
+
+```text
+1. 播放按钮可以切换播放/暂停。
+2. 进度条随播放推进。
+3. 拖动进度条可以 Seek。
+4. 切换播放速度后基本可用。
+5. 播放结束后状态变成 Ended。
+```
+
+---
+
+## docs/spec/iterations/iter-08-network-playback.md
+
+# Iteration 08：网络播放
+
+## 目标
+
+支持网络 URL 播放。
+
+## 范围
+
+支持：
+
+```text
+1. http/https mp4
+2. hls/m3u8 初步支持
+3. rtsp 作为可选验证
+```
+
+## 设计要求
+
+```text
+1. 本地文件和网络 URL 都通过 MediaSource 表达。
+2. PlayerController 不区分本地和网络细节。
+3. FFmpegDemuxer 内部处理 avformat_network_init。
+4. 网络打开不能阻塞 UI。
+5. 网络失败要有错误提示。
+```
+
+## 验收标准
+
+```text
+1. 输入 http mp4 URL 可以播放。
+2. 输入错误 URL 有错误提示。
+3. 网络打开过程中 UI 不冻结。
+4. 可以停止网络播放。
+```
+
+---
+
+## docs/spec/iterations/iter-09-playlist-config.md
+
+# Iteration 09：播放列表 + 最近打开 + 配置持久化
+
+## 目标
+
+让播放器具备基础媒体管理能力。
+
+## 范围
+
+实现：
+
+```text
+1. 添加本地文件到播放列表
+2. 添加网络 URL 到播放列表
+3. 双击播放列表项播放
+4. 播放结束自动播放下一项
+5. 最近打开记录
+6. 播放器配置保存和恢复
+```
+
+## 数据结构
+
+```cpp
+struct PlaylistItem {
+    QString title;
+    MediaSource source;
+    QString durationText;
+    QString resolutionText;
+    QString codecText;
+};
+```
+
+## 验收标准
+
+```text
+1. 可以添加多个文件。
+2. 可以添加 URL。
+3. 双击列表项可以播放。
+4. 关闭应用后最近打开记录仍存在。
+5. 音量、渲染后端等配置可以保存。
+```
+
+---
+
+## docs/spec/iterations/iter-10-subtitle-srt.md
+
+# Iteration 10：SRT 字幕
+
+## 目标
+
+支持外挂 SRT 字幕。
+
+## 范围
+
+实现：
+
+```text
+1. SrtSubtitleParser
+2. SubtitleTrack
+3. 字幕按时间显示
+4. 字幕字体大小设置
+5. 字幕延迟设置
+6. Seek 后字幕刷新
+```
+
+## 暂不实现
+
+```text
+1. ass/ssa 高级字幕
+2. libass 渲染
+3. 内嵌字幕流选择
+```
+
+## 验收标准
+
+```text
+1. 可以加载 .srt 文件。
+2. 播放时字幕按时间显示。
+3. Seek 后字幕正确变化。
+4. 字幕延迟设置有效。
+```
+
+---
+
+## docs/spec/iterations/iter-11-player-tools.md
+
+# Iteration 11：播放器工具能力
+
+## 目标
+
+完善播放器使用体验。
+
+## 范围
+
+实现：
+
+```text
+1. 全屏
+2. 截图
+3. 快进 / 快退
+4. 单帧步进
+5. 快捷键
+6. 当前帧信息显示
+```
+
+## 快捷键建议
+
+```text
+Space：播放 / 暂停
+Left：后退 5 秒
+Right：前进 5 秒
+Up：音量增加
+Down：音量减少
+F：全屏
+S：截图
+.：下一帧
+```
+
+## 验收标准
+
+```text
+1. 快捷键可用。
+2. 截图可保存。
+3. 全屏切换正常。
+4. 单帧步进在暂停状态下可用。
+```
+
+---
+
+## docs/spec/iterations/iter-12-performance-hwaccel-interface.md
+
+# Iteration 12：性能统计 + 硬解码接口预留
+
+## 目标
+
+建立性能观测能力，并为硬解码做架构准备。
+
+## 范围
+
+实现：
+
+```text
+1. 解码 FPS 统计
+2. 渲染 FPS 统计
+3. 音频缓冲状态统计
+4. 视频丢帧统计
+5. 当前渲染后端显示
+6. 当前解码模式显示
+7. DecodeMode 配置项
+8. 硬解码接口占位
+```
+
+## 暂不实现
+
+```text
+1. D3D11VA 真正硬解
+2. VAAPI 真正硬解
+3. VideoToolbox 真正硬解
+4. CUDA/NVDEC 真正硬解
+```
+
+## 验收标准
+
+```text
+1. UI 可以显示 FPS、丢帧、缓冲等信息。
+2. 配置里可以选择 decode mode。
+3. 当前默认仍然使用软件解码。
+4. 后续实现硬解不需要重写 PlayerController。
+```
+
+---
+
+## docs/spec/iterations/iter-13-optional-extensions.md
+
+# Iteration 13：可选扩展能力
+
+## 目标
+
+按需要引入更专业的音视频能力。
+
+## 可选方向
+
+```text
+1. libass：高级字幕渲染
+2. OpenAL Soft：替换或补充 QtAudioOutput
+3. OpenCV：缩略图生成、帧分析、导出工具
+4. SQLite：大型媒体库缓存
+5. FFmpeg avfilter：滤镜、旋转、裁剪、画面调整
+6. NV12/P010/HDR：高级像素格式和色彩空间
+```
+
+## 规则
+
+```text
+1. 所有扩展必须通过接口接入。
+2. 不允许扩展功能污染核心播放链路。
+3. 所有扩展默认通过 Conan option 控制。
+4. 默认关闭非必要扩展。
+```
+
+---
+
+## docs/spec/iterations/iter-14-packaging.md
+
+# Iteration 14：打包发布
+
+## 目标
+
+让 PlayerLab 变成可分发桌面程序。
+
+## 范围
+
+实现：
+
+```text
+1. Windows 打包
+2. README 编译说明
+3. README 使用说明
+4. 运行时依赖收集
+5. FFmpeg 动态库拷贝
+6. Qt 插件拷贝
+7. 默认配置生成
+```
+
+## 验收标准
+
+```text
+1. 新机器上可以运行打包产物。
+2. 可以打开本地视频。
+3. 可以播放网络 URL。
+4. 没有明显缺失 dll / so / dylib。
+5. README 可以指导用户完成构建和运行。
+```
