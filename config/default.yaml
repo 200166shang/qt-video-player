@@ -1,0 +1,2 @@
+log_level: info
+preferred_renderer: opengl

@@ -65,6 +65,45 @@
 
 ---
 
+## Iteration 02: Conan + CMake + Dependencies
+
+### Date
+
+2026-05-08
+
+### Summary
+
+完成 Conan 依赖管理接入、CMake 依赖链接、日志宏封装、YAML AppConfig、FFmpeg 探针模块。
+
+### Added
+
+- `conanfile.py`（FFmpeg、spdlog、fmt、nlohmann_json、stb、yaml-cpp 依赖及 CMake 生成器）
+- `src/utils/Logger.*`（spdlog 日志封装 + `LOG_*` 宏）
+- `src/config/AppConfig.*`（默认 YAML 配置加载）
+- `src/ffmpeg/FFmpegProbe.*`（FFmpeg 可用性探针）
+- `src/utils/StbVersion.*`（stb 接入验证）
+- `config/default.yaml`（默认应用配置）
+
+### Changed
+
+- `CMakeLists.txt` 增加第三方依赖 `find_package`、模块化静态库 target 与链接关系
+- `src/main.cpp` 增加日志初始化、YAML 配置加载与依赖探针调用
+- `scripts/build.sh` 增加 Conan 安装与 Toolchain 自动接入逻辑
+
+### Fixed
+
+- 修复 Conan 依赖解析冲突（`spdlog` 与 `fmt` 版本/后端匹配）
+- 修复 Conan target 名称大小写与 CMake 链接名不一致问题
+- 修复 `AppConfig` 日志调用在静态库链接阶段的符号解析问题
+
+### Notes
+
+- 验证通过：`conan install` 成功、`cmake configure` 成功、`cmake build` 成功
+- UI 目录未引入 FFmpeg 头文件，保持 `UI -> FFmpeg` 禁止依赖约束
+- 日志输出包含线程 id、函数、文件与行号（通过 spdlog source location）
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

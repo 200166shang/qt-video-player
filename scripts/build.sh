@@ -9,9 +9,20 @@ if [[ $# -gt 0 && "${1}" != -* ]]; then
   shift
 fi
 
+if command -v conan >/dev/null 2>&1; then
+  conan install "${ROOT_DIR}" -of "${BUILD_DIR}" -s build_type="${BUILD_TYPE}" --build=missing
+fi
+
 mkdir -p "${ROOT_DIR}/bin"
 
-cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" "$@"
+TOOLCHAIN_FILE="${BUILD_DIR}/build/${BUILD_TYPE}/generators/conan_toolchain.cmake"
+CMAKE_ARGS=()
+if [[ -f "${TOOLCHAIN_FILE}" ]]; then
+  CMAKE_ARGS+=("-DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE}")
+fi
+
+cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" "${CMAKE_ARGS[@]}" "$@"
 cmake --build "${BUILD_DIR}" --config "${BUILD_TYPE}" -j
 
 echo "Build done. Executable should be in: ${ROOT_DIR}/bin"
+EOF && chmod +x scripts/build.sh
