@@ -38,11 +38,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     centerLayout->setContentsMargins(0, 0, 0, 0);
     centerLayout->setSpacing(0);
 
-    auto* videoWidget = new OpenGLVideoWidget(this);
+    videoWidget_ = new OpenGLVideoWidget(this);
     auto* mediaLibrary = new MediaLibraryWidget(this);
     mediaLibrary->setFixedHeight(120);
 
-    centerLayout->addWidget(videoWidget, 1);
+    centerLayout->addWidget(videoWidget_, 1);
     centerLayout->addWidget(mediaLibrary);
 
     mediaInfoPanel_ = new MediaInfoPanel(this);
@@ -68,6 +68,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(playerController_, &playerlab::core::PlayerController::mediaInfoChanged, this,
             [this](const playerlab::core::MediaInfo& info) {
                 mediaInfoPanel_->setMediaInfo(info);
+            });
+    connect(playerController_, &playerlab::core::PlayerController::videoFrameReady, this,
+            [this](const playerlab::core::VideoFrame& frame) {
+                if (videoWidget_ != nullptr) {
+                    videoWidget_->setVideoFrame(frame);
+                }
             });
     connect(playerController_, &playerlab::core::PlayerController::openFailed, this,
             [this](const QString& error) {

@@ -4,6 +4,7 @@
 
 #include <QOpenGLWidget>
 
+#include "core/VideoFrame.h"
 #include "../render/IVideoRenderer.h"
 
 class OpenGLVideoWidget : public QOpenGLWidget {
@@ -11,6 +12,7 @@ class OpenGLVideoWidget : public QOpenGLWidget {
 
 public:
     explicit OpenGLVideoWidget(QWidget* parent = nullptr);
+    void setVideoFrame(const playerlab::core::VideoFrame& frame);
 
 protected:
     void initializeGL() override;

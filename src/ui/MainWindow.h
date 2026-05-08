@@ -4,6 +4,7 @@
 
 class ControlBar;
 class MediaInfoPanel;
+class OpenGLVideoWidget;
 
 namespace playerlab::core {
 class PlayerController;
@@ -21,5 +22,6 @@ private slots:
 private:
     ControlBar* controlBar_ = nullptr;
     MediaInfoPanel* mediaInfoPanel_ = nullptr;
+    OpenGLVideoWidget* videoWidget_ = nullptr;
     playerlab::core::PlayerController* playerController_ = nullptr;
 };

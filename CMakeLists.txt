@@ -50,6 +50,10 @@ add_library(playerlab_ffmpeg STATIC
     src/ffmpeg/FFmpegDemuxer.cpp
     src/ffmpeg/FFmpegProbe.h
     src/ffmpeg/FFmpegProbe.cpp
+    src/ffmpeg/PacketQueue.h
+    src/ffmpeg/FrameQueue.h
+    src/ffmpeg/FFmpegVideoDecoder.h
+    src/ffmpeg/FFmpegVideoDecoder.cpp
 )
 target_link_libraries(playerlab_ffmpeg PUBLIC
     ffmpeg::avcodec
@@ -65,6 +69,7 @@ add_executable(playerlab
     src/main.cpp
     src/core/MediaInfo.h
     src/core/MediaSource.h
+    src/core/VideoFrame.h
     src/core/PlayerController.h
     src/core/PlayerController.cpp
     src/ui/MainWindow.h
@@ -103,3 +108,22 @@ target_include_directories(playerlab PRIVATE ${CMAKE_SOURCE_DIR}/src)
 if(APPLE)
     set_target_properties(playerlab PROPERTIES MACOSX_BUNDLE FALSE)
 endif()
+
+add_executable(playerlab_decode_probe
+    src/tools/DecodeProbe.cpp
+    src/core/MediaSource.h
+    src/core/VideoFrame.h
+    src/ffmpeg/FFmpegGlobal.h
+    src/ffmpeg/FFmpegGlobal.cpp
+    src/ffmpeg/PacketQueue.h
+    src/ffmpeg/FrameQueue.h
+    src/ffmpeg/FFmpegVideoDecoder.h
+    src/ffmpeg/FFmpegVideoDecoder.cpp
+)
+target_link_libraries(playerlab_decode_probe
+    PRIVATE
+        Qt6::OpenGLWidgets
+        playerlab_ffmpeg
+        playerlab_utils
+)
+target_include_directories(playerlab_decode_probe PRIVATE ${CMAKE_SOURCE_DIR}/src)
