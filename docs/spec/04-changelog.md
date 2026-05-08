@@ -141,6 +141,44 @@
 
 ---
 
+## Iteration 05: Audio Decode + Audio Output
+
+### Date
+
+2026-05-09
+
+### Summary
+
+实现音频解码、重采样与 Qt 音频输出链路，并接入音量、静音、音频暂停/恢复控制。
+
+### Added
+
+- `src/core/AudioFrame.h`（音频帧数据结构）
+- `src/ffmpeg/FFmpegResampler.*`（音频重采样到 48kHz、stereo、S16）
+- `src/ffmpeg/FFmpegAudioDecoder.*`（音频流解码线程与音频帧队列）
+- `src/audio/IAudioOutput.h`（音频输出抽象接口）
+- `src/audio/QtAudioOutput.*`（Qt Multimedia 音频输出实现）
+
+### Changed
+
+- `src/core/PlayerController.*` 接入音频解码与输出管线，新增 `setVolume / setMuted / setPaused`
+- `src/ui/ControlBar.*` 增加静音按钮、音量滑块、暂停/恢复信号
+- `src/ui/MainWindow.cpp` 串联 UI 音频控制到 `PlayerController`
+- `CMakeLists.txt` 新增 Qt6 Multimedia 依赖并纳入 iteration 05 新文件
+
+### Fixed
+
+- 修复 `FFmpegResampler` 对 `av_channel_layout_default` 返回值误用导致的编译错误
+- 修复 `QtAudioOutput` 中 `QAudioSink` 不完整类型导致的析构编译错误
+
+### Notes
+
+- 验证通过：`cmake --build build -j8` 成功
+- 本次未实现 AV 同步（属于 Iteration 06）
+- 本次未实现 seek/播放速度/完整状态机（属于 Iteration 07）
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

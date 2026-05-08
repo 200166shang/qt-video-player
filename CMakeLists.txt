@@ -14,7 +14,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_SOURCE_DIR}/bin)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets Multimedia)
 find_package(fmt REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(nlohmann_json REQUIRED)
@@ -54,6 +54,10 @@ add_library(playerlab_ffmpeg STATIC
     src/ffmpeg/FrameQueue.h
     src/ffmpeg/FFmpegVideoDecoder.h
     src/ffmpeg/FFmpegVideoDecoder.cpp
+    src/ffmpeg/FFmpegResampler.h
+    src/ffmpeg/FFmpegResampler.cpp
+    src/ffmpeg/FFmpegAudioDecoder.h
+    src/ffmpeg/FFmpegAudioDecoder.cpp
 )
 target_link_libraries(playerlab_ffmpeg PUBLIC
     ffmpeg::avcodec
@@ -70,8 +74,12 @@ add_executable(playerlab
     src/core/MediaInfo.h
     src/core/MediaSource.h
     src/core/VideoFrame.h
+    src/core/AudioFrame.h
     src/core/PlayerController.h
     src/core/PlayerController.cpp
+    src/audio/IAudioOutput.h
+    src/audio/QtAudioOutput.h
+    src/audio/QtAudioOutput.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/Sidebar.h
@@ -99,6 +107,7 @@ target_link_libraries(playerlab
     PRIVATE
         Qt6::Widgets
         Qt6::OpenGLWidgets
+        Qt6::Multimedia
         playerlab_utils
         playerlab_config
         playerlab_ffmpeg

@@ -65,6 +65,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     playerController_ = new playerlab::core::PlayerController(this);
     connect(controlBar_, &ControlBar::openRequested, this, &MainWindow::onOpenRequested);
+    connect(controlBar_, &ControlBar::volumeChanged, this, [this](const float volume) {
+        if (playerController_ != nullptr) {
+            playerController_->setVolume(volume);
+        }
+    });
+    connect(controlBar_, &ControlBar::mutedChanged, this, [this](const bool muted) {
+        if (playerController_ != nullptr) {
+            playerController_->setMuted(muted);
+        }
+    });
+    connect(controlBar_, &ControlBar::pausedChanged, this, [this](const bool paused) {
+        if (playerController_ != nullptr) {
+            playerController_->setPaused(paused);
+        }
+    });
     connect(playerController_, &playerlab::core::PlayerController::mediaInfoChanged, this,
             [this](const playerlab::core::MediaInfo& info) {
                 mediaInfoPanel_->setMediaInfo(info);
@@ -91,7 +106,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 }
 
 void MainWindow::onOpenRequested() {
-    const QString filter = "Media Files (*.mp4 *.mkv *.mov);;All Files (*)";
+    const QString filter =
+        "Media Files (*.mp4 *.MP4 *.mkv *.MKV *.mov *.MOV *.m4v *.M4V *.avi *.AVI);;All Files (*)";
     const QString filePath = QFileDialog::getOpenFileName(this, "Open Media File", QString(), filter);
     if (filePath.isEmpty()) {
         return;
