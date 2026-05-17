@@ -15,6 +15,7 @@ void PlaybackClock::reset(const bool hasAudio) {
     audioAnchorWall_ = {};
 
     pauseWall_ = {};
+    playbackRate_ = 1.0;
 }
 
 void PlaybackClock::onPauseChanged(const bool paused) {
@@ -54,6 +55,28 @@ void PlaybackClock::ensureSystemClockStarted(const double startPtsSec) {
     systemClockStarted_ = true;
 }
 
+void PlaybackClock::setPlaybackRate(const double rate) {
+    const double safeRate = rate > 0.0 ? rate : 1.0;
+    if (playbackRate_ == safeRate) {
+        return;
+    }
+
+    const Clock::time_point now = paused_ ? pauseWall_ : Clock::now();
+    const double currentMaster = masterClockSec();
+    playbackRate_ = safeRate;
+
+    if (hasAudio_ && audioClockValid_) {
+        audioAnchorPtsSec_ = currentMaster;
+        audioAnchorWall_ = now;
+        return;
+    }
+
+    if (systemClockStarted_) {
+        systemBasePtsSec_ = currentMaster;
+        systemBaseWall_ = now;
+    }
+}
+
 double PlaybackClock::masterClockSec() const {
     const Clock::time_point now = paused_ ? pauseWall_ : Clock::now();
 
@@ -64,7 +87,7 @@ double PlaybackClock::masterClockSec() const {
     if (!systemClockStarted_) {
         return 0.0;
     }
-    return systemBasePtsSec_ + secondsBetween(systemBaseWall_, now);
+    return systemBasePtsSec_ + secondsBetween(systemBaseWall_, now) * playbackRate_;
 }
 
 double PlaybackClock::secondsBetween(const Clock::time_point from, const Clock::time_point to) {

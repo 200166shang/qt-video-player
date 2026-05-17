@@ -6,6 +6,8 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
+#include <cmath>
+
 namespace {
 
 std::string ffmpegErrorToString(const int errNum) {
@@ -22,15 +24,18 @@ FFmpegAudioDecoder::~FFmpegAudioDecoder() {
     stop();
 }
 
-bool FFmpegAudioDecoder::open(const playerlab::core::MediaSource& source, std::string& outError) {
+bool FFmpegAudioDecoder::open(const playerlab::core::MediaSource& source, std::string& outError,
+                              const double startPositionSec, const double playbackRate) {
     stop();
     packetQueue_.reset();
     frameQueue_.reset();
+    demuxFinished_.store(false);
+    decodeFinished_.store(false);
 
-    if (!openInput(source.uri, outError)) {
+    if (!openInput(source.uri, outError, startPositionSec)) {
         return false;
     }
-    if (!openAudioDecoder(outError)) {
+    if (!openAudioDecoder(outError, playbackRate)) {
         stop();
         return false;
     }
@@ -70,13 +75,19 @@ void FFmpegAudioDecoder::stop() {
         avformat_close_input(&formatContext_);
     }
     audioStreamIndex_ = -1;
+    demuxFinished_.store(false);
+    decodeFinished_.store(false);
 }
 
 bool FFmpegAudioDecoder::tryPopFrame(playerlab::core::AudioFrame& outFrame) {
     return frameQueue_.tryPop(outFrame);
 }
 
-bool FFmpegAudioDecoder::openInput(const std::string& uri, std::string& outError) {
+bool FFmpegAudioDecoder::isDrained() const {
+    return demuxFinished_.load() && decodeFinished_.load() && packetQueue_.empty() && frameQueue_.empty();
+}
+
+bool FFmpegAudioDecoder::openInput(const std::string& uri, std::string& outError, const double startPositionSec) {
     const int openRet = avformat_open_input(&formatContext_, uri.c_str(), nullptr, nullptr);
     if (openRet < 0) {
         outError = "open input failed: " + ffmpegErrorToString(openRet);
@@ -95,10 +106,21 @@ bool FFmpegAudioDecoder::openInput(const std::string& uri, std::string& outError
         return false;
     }
 
+    if (startPositionSec > 0.0) {
+        AVStream* stream = formatContext_->streams[audioStreamIndex_];
+        const int64_t targetPts = av_rescale_q(static_cast<int64_t>(startPositionSec * AV_TIME_BASE), AV_TIME_BASE_Q,
+                                               stream->time_base);
+        const int seekRet = av_seek_frame(formatContext_, audioStreamIndex_, targetPts, AVSEEK_FLAG_BACKWARD);
+        if (seekRet < 0) {
+            outError = "seek audio failed: " + ffmpegErrorToString(seekRet);
+            return false;
+        }
+    }
+
     return true;
 }
 
-bool FFmpegAudioDecoder::openAudioDecoder(std::string& outError) {
+bool FFmpegAudioDecoder::openAudioDecoder(std::string& outError, const double playbackRate) {
     AVStream* stream = formatContext_->streams[audioStreamIndex_];
     const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
     if (codec == nullptr) {
@@ -124,7 +146,14 @@ bool FFmpegAudioDecoder::openAudioDecoder(std::string& outError) {
         return false;
     }
 
-    if (!resampler_.open(codecContext_->ch_layout, codecContext_->sample_rate, codecContext_->sample_fmt, outError)) {
+    const double safeRate = playbackRate > 0.0 ? playbackRate : 1.0;
+    outputSampleRate_ = static_cast<int>(std::lround(48000.0 / safeRate));
+    if (outputSampleRate_ <= 0) {
+        outputSampleRate_ = 48000;
+    }
+
+    if (!resampler_.open(codecContext_->ch_layout, codecContext_->sample_rate, codecContext_->sample_fmt,
+                         outputSampleRate_, outError)) {
         return false;
     }
 
@@ -158,6 +187,7 @@ void FFmpegAudioDecoder::demuxLoop() {
         flushPacket->stream_index = audioStreamIndex_;
         packetQueue_.push(flushPacket);
     }
+    demuxFinished_.store(true);
 }
 
 void FFmpegAudioDecoder::decodeLoop() {
@@ -206,6 +236,7 @@ void FFmpegAudioDecoder::decodeLoop() {
         }
     }
 
+    decodeFinished_.store(true);
     av_frame_free(&frame);
 }
 

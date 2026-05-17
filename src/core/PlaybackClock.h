@@ -10,6 +10,7 @@ public:
     void onPauseChanged(bool paused);
     void updateAudioClock(double clockSec);
     void ensureSystemClockStarted(double startPtsSec);
+    void setPlaybackRate(double rate);
     [[nodiscard]] double masterClockSec() const;
 
 private:
@@ -29,6 +30,7 @@ private:
     Clock::time_point audioAnchorWall_{};
 
     Clock::time_point pauseWall_{};
+    double playbackRate_ = 1.0;
 };
 
 }  // namespace playerlab::core

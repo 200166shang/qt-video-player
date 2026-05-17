@@ -24,13 +24,14 @@ public:
     FFmpegVideoDecoder(const FFmpegVideoDecoder&) = delete;
     FFmpegVideoDecoder& operator=(const FFmpegVideoDecoder&) = delete;
 
-    bool open(const playerlab::core::MediaSource& source, std::string& outError);
+    bool open(const playerlab::core::MediaSource& source, std::string& outError, double startPositionSec = 0.0);
     void stop();
 
     [[nodiscard]] bool tryPopFrame(playerlab::core::VideoFrame& outFrame);
+    [[nodiscard]] bool isDrained() const;
 
 private:
-    bool openInput(const std::string& uri, std::string& outError);
+    bool openInput(const std::string& uri, std::string& outError, double startPositionSec);
     bool openVideoDecoder(std::string& outError);
     void demuxLoop();
     void decodeLoop();
@@ -46,6 +47,8 @@ private:
 
     std::thread demuxThread_;
     std::thread decodeThread_;
+    std::atomic<bool> demuxFinished_{false};
+    std::atomic<bool> decodeFinished_{false};
 };
 
 }  // namespace playerlab::ffmpeg

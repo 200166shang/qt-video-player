@@ -214,6 +214,43 @@
 
 ---
 
+## Iteration 07: Playback Control
+
+### Date
+
+2026-05-17
+
+### Summary
+
+补齐播放控制基础能力：播放/暂停/停止、Seek、进度与时间显示、播放速度切换，以及基础播放状态机与 Ended 状态流转。
+
+### Added
+
+- `PlayerController::PlaybackState`（Stopped/Playing/Paused/Ended）与状态信号
+- `PlayerController` 控制接口：`play/pause/togglePlayPause/seek/setPlaybackRate`
+- `ControlBar` 控件能力：Stop 按钮、速度下拉（0.5x/1.0x/1.25x/1.5x/2.0x）、时间标签、拖动 seek
+- 进度与时长通知信号：`positionChanged/current+duration`、`durationChanged`
+- 解码器最小 seek 支撑：`FFmpegVideoDecoder`、`FFmpegAudioDecoder` 支持从指定时间点启动
+
+### Changed
+
+- `PlayerController` 播放流程重构为状态机驱动，统一管理播放控制、进度发布与结束态判定
+- `PlaybackClock` 增加播放速度参数，支持非 1.0x 速率时钟推进
+- `MainWindow` 完整串联 ControlBar 与 PlayerController 新增控制/状态信号
+- `PacketQueue` 增加 `empty/size` 查询能力，支持解码链路 drained 判定
+
+### Fixed
+
+- 修复进度条仅占位、无法触发 seek 的问题
+- 修复播放结束后无明确状态反馈的问题（可进入 Ended）
+
+### Notes
+
+- 验证通过：`cmake --build build -j8` 成功
+- 速度切换采用迭代内“基础可用”策略：不引入高级变速音频算法（保持 Iteration 07 范围）
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

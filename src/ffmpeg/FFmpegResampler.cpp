@@ -11,7 +11,7 @@ extern "C" {
 
 namespace {
 
-constexpr int kOutputSampleRate = 48000;
+constexpr int kDefaultOutputSampleRate = 48000;
 constexpr AVSampleFormat kOutputSampleFormat = AV_SAMPLE_FMT_S16;
 
 }  // namespace
@@ -23,8 +23,9 @@ FFmpegResampler::~FFmpegResampler() {
 }
 
 bool FFmpegResampler::open(const AVChannelLayout& inChannelLayout, const int inSampleRate, const int inSampleFormat,
-                           std::string& outError) {
+                           const int outSampleRate, std::string& outError) {
     close();
+    outSampleRate_ = outSampleRate > 0 ? outSampleRate : kDefaultOutputSampleRate;
 
     AVChannelLayout outChannelLayout;
     av_channel_layout_default(&outChannelLayout, 2);
@@ -41,7 +42,7 @@ bool FFmpegResampler::open(const AVChannelLayout& inChannelLayout, const int inS
     av_opt_set_sample_fmt(swrContext_, "in_sample_fmt", static_cast<AVSampleFormat>(inSampleFormat), 0);
 
     av_opt_set_chlayout(swrContext_, "out_chlayout", &outChannelLayout, 0);
-    av_opt_set_int(swrContext_, "out_sample_rate", kOutputSampleRate, 0);
+    av_opt_set_int(swrContext_, "out_sample_rate", outSampleRate_, 0);
     av_opt_set_sample_fmt(swrContext_, "out_sample_fmt", kOutputSampleFormat, 0);
     av_channel_layout_uninit(&outChannelLayout);
 
@@ -70,7 +71,7 @@ bool FFmpegResampler::resample(const AVFrame* frame, playerlab::core::AudioFrame
     }
 
     const int outSamples = av_rescale_rnd(swr_get_delay(swrContext_, frame->sample_rate) + frame->nb_samples,
-                                          kOutputSampleRate, frame->sample_rate, AV_ROUND_UP);
+                                          outSampleRate_, frame->sample_rate, AV_ROUND_UP);
     if (outSamples <= 0) {
         return false;
     }
@@ -92,7 +93,7 @@ bool FFmpegResampler::resample(const AVFrame* frame, playerlab::core::AudioFrame
     const int bytesPerSample = av_get_bytes_per_sample(kOutputSampleFormat);
     const int usedBytes = converted * outChannels * bytesPerSample;
     outFrame.data.resize(static_cast<std::size_t>(std::max(0, usedBytes)));
-    outFrame.sampleRate = kOutputSampleRate;
+    outFrame.sampleRate = outSampleRate_;
     outFrame.channels = outChannels;
     outFrame.sampleFormat = playerlab::core::AudioSampleFormat::S16;
     outFrame.sampleCount = converted;

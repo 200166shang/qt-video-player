@@ -25,12 +25,15 @@ FFmpegVideoDecoder::~FFmpegVideoDecoder() {
     stop();
 }
 
-bool FFmpegVideoDecoder::open(const playerlab::core::MediaSource& source, std::string& outError) {
+bool FFmpegVideoDecoder::open(const playerlab::core::MediaSource& source, std::string& outError,
+                              const double startPositionSec) {
     stop();
     packetQueue_.reset();
     frameQueue_.reset();
+    demuxFinished_.store(false);
+    decodeFinished_.store(false);
 
-    if (!openInput(source.uri, outError)) {
+    if (!openInput(source.uri, outError, startPositionSec)) {
         return false;
     }
     if (!openVideoDecoder(outError)) {
@@ -72,13 +75,19 @@ void FFmpegVideoDecoder::stop() {
         avformat_close_input(&formatContext_);
     }
     videoStreamIndex_ = -1;
+    demuxFinished_.store(false);
+    decodeFinished_.store(false);
 }
 
 bool FFmpegVideoDecoder::tryPopFrame(playerlab::core::VideoFrame& outFrame) {
     return frameQueue_.tryPop(outFrame);
 }
 
-bool FFmpegVideoDecoder::openInput(const std::string& uri, std::string& outError) {
+bool FFmpegVideoDecoder::isDrained() const {
+    return demuxFinished_.load() && decodeFinished_.load() && packetQueue_.empty() && frameQueue_.empty();
+}
+
+bool FFmpegVideoDecoder::openInput(const std::string& uri, std::string& outError, const double startPositionSec) {
     const int openRet = avformat_open_input(&formatContext_, uri.c_str(), nullptr, nullptr);
     if (openRet < 0) {
         outError = "open input failed: " + ffmpegErrorToString(openRet);
@@ -95,6 +104,17 @@ bool FFmpegVideoDecoder::openInput(const std::string& uri, std::string& outError
     if (videoStreamIndex_ < 0) {
         outError = "video stream not found";
         return false;
+    }
+
+    if (startPositionSec > 0.0) {
+        AVStream* stream = formatContext_->streams[videoStreamIndex_];
+        const int64_t targetPts = av_rescale_q(static_cast<int64_t>(startPositionSec * AV_TIME_BASE), AV_TIME_BASE_Q,
+                                               stream->time_base);
+        const int seekRet = av_seek_frame(formatContext_, videoStreamIndex_, targetPts, AVSEEK_FLAG_BACKWARD);
+        if (seekRet < 0) {
+            outError = "seek video failed: " + ffmpegErrorToString(seekRet);
+            return false;
+        }
     }
 
     return true;
@@ -161,6 +181,7 @@ void FFmpegVideoDecoder::demuxLoop() {
         flushPacket->stream_index = videoStreamIndex_;
         packetQueue_.push(flushPacket);
     }
+    demuxFinished_.store(true);
 }
 
 void FFmpegVideoDecoder::decodeLoop() {
@@ -204,6 +225,7 @@ void FFmpegVideoDecoder::decodeLoop() {
         }
     }
 
+    decodeFinished_.store(true);
     av_frame_free(&frame);
 }
 

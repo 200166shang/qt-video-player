@@ -65,6 +65,26 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     playerController_ = new playerlab::core::PlayerController(this);
     connect(controlBar_, &ControlBar::openRequested, this, &MainWindow::onOpenRequested);
+    connect(controlBar_, &ControlBar::playPauseRequested, this, [this]() {
+        if (playerController_ != nullptr) {
+            playerController_->togglePlayPause();
+        }
+    });
+    connect(controlBar_, &ControlBar::stopRequested, this, [this]() {
+        if (playerController_ != nullptr) {
+            playerController_->stop();
+        }
+    });
+    connect(controlBar_, &ControlBar::seekRequested, this, [this](const double targetSec) {
+        if (playerController_ != nullptr) {
+            playerController_->seek(targetSec);
+        }
+    });
+    connect(controlBar_, &ControlBar::playbackRateChanged, this, [this](const double rate) {
+        if (playerController_ != nullptr) {
+            playerController_->setPlaybackRate(rate);
+        }
+    });
     connect(controlBar_, &ControlBar::volumeChanged, this, [this](const float volume) {
         if (playerController_ != nullptr) {
             playerController_->setVolume(volume);
@@ -73,11 +93,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(controlBar_, &ControlBar::mutedChanged, this, [this](const bool muted) {
         if (playerController_ != nullptr) {
             playerController_->setMuted(muted);
-        }
-    });
-    connect(controlBar_, &ControlBar::pausedChanged, this, [this](const bool paused) {
-        if (playerController_ != nullptr) {
-            playerController_->setPaused(paused);
         }
     });
     connect(playerController_, &playerlab::core::PlayerController::mediaInfoChanged, this,
@@ -93,6 +108,30 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(playerController_, &playerlab::core::PlayerController::openFailed, this,
             [this](const QString& error) {
                 mediaInfoPanel_->setError(error);
+            });
+    connect(playerController_, &playerlab::core::PlayerController::playbackStateChanged, this,
+            [this](const playerlab::core::PlayerController::PlaybackState state) {
+                if (controlBar_ != nullptr) {
+                    controlBar_->setPlaybackState(state);
+                }
+            });
+    connect(playerController_, &playerlab::core::PlayerController::positionChanged, this,
+            [this](const double currentSec, const double durationSec) {
+                if (controlBar_ != nullptr) {
+                    controlBar_->setProgress(currentSec, durationSec);
+                }
+            });
+    connect(playerController_, &playerlab::core::PlayerController::durationChanged, this,
+            [this](const double durationSec) {
+                if (controlBar_ != nullptr) {
+                    controlBar_->setDuration(durationSec);
+                }
+            });
+    connect(playerController_, &playerlab::core::PlayerController::playbackRateChanged, this,
+            [this](const double rate) {
+                if (controlBar_ != nullptr) {
+                    controlBar_->setPlaybackRate(rate);
+                }
             });
 
     setStyleSheet(

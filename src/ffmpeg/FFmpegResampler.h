@@ -18,7 +18,8 @@ public:
     FFmpegResampler(const FFmpegResampler&) = delete;
     FFmpegResampler& operator=(const FFmpegResampler&) = delete;
 
-    bool open(const AVChannelLayout& inChannelLayout, int inSampleRate, int inSampleFormat, std::string& outError);
+    bool open(const AVChannelLayout& inChannelLayout, int inSampleRate, int inSampleFormat, int outSampleRate,
+              std::string& outError);
     void close();
     [[nodiscard]] bool isOpen() const;
 
@@ -26,6 +27,7 @@ public:
 
 private:
     SwrContext* swrContext_ = nullptr;
+    int outSampleRate_ = 48000;
 };
 
 }  // namespace playerlab::ffmpeg
