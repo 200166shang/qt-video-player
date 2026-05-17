@@ -30,13 +30,14 @@ PlayerLab 是一个 PC 媒体播放器项目，技术栈：
 ```text
 docs/spec/
 ├── README.md
-├── 01-architecture-contract.md
+├── 01-architecture.md
 ├── 02-roadmap.md
 ├── 03-adr.md
 ├── 04-changelog.md
 └── iterations/
     ├── TEMPLATE.md
-    └── iter-xx-xxx.md
+    ├── iter-xx-xxx.md
+    └── iter-xxa-xxx.md
 ```
 
 ## 3. 文件职责
@@ -52,7 +53,7 @@ spec 体系的入口文件。
 - 更新流程
 - spec 规则
 
-### 01-architecture-contract.md
+### 01-architecture.md
 
 定义架构边界与核心约束。
 
@@ -127,6 +128,28 @@ ADR 即架构决策记录。
 
 只有当前迭代需要详细展开，未来迭代可保持粗略。
 
+### iterations/iter-xxa-xxx.md
+
+定义已完成迭代之后插入的补充 / 重构迭代。
+
+适用于：
+
+- 对已完成能力做结构性重构
+- 在不推翻 roadmap 主线的前提下插入专项优化
+- 为后续迭代清理技术债
+
+命名规则：
+
+- 以最近一个已完成 iteration 为锚点
+- 使用字母后缀表示插入顺序
+- 示例：`iter-07a-av-sync-refactor-ffplay.md`
+
+目的：
+
+- 不重写历史 iteration 编号
+- 不批量重命名未来 iteration 文件
+- 在 changelog / roadmap / ADR 中保留稳定引用
+
 ---
 
 ## 4. 必要阅读顺序
@@ -134,7 +157,7 @@ ADR 即架构决策记录。
 执行任何迭代前，按顺序阅读：
 
 1. `docs/spec/README.md`
-2. `docs/spec/01-architecture-contract.md`
+2. `docs/spec/01-architecture.md`
 3. `docs/spec/02-roadmap.md`
 4. `docs/spec/iterations/` 下当前迭代的 spec
 
@@ -189,6 +212,13 @@ ADR 即架构决策记录。
 - 网络播放延后
 - 插入渲染器重构迭代
 
+如果只是插入一个补充 / 重构 iteration，优先新增带字母后缀的 iteration 文件，而不是整体重编号。
+
+示例：
+
+- `iter-07a-av-sync-refactor-ffplay.md`
+- roadmap 中新增 `Iteration 07A`
+
 ### 6.3 架构方向变更
 
 先更新：
@@ -197,7 +227,7 @@ ADR 即架构决策记录。
 
 再根据需要更新：
 
-- `docs/spec/01-architecture-contract.md`
+- `docs/spec/01-architecture.md`
 - `docs/spec/02-roadmap.md`
 - 当前迭代 spec
 

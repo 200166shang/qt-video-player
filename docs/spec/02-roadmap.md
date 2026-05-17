@@ -217,6 +217,37 @@ Playback Control
 
 ---
 
+## Iteration 07A
+
+AV Sync Refactor toward ffplay
+
+**目标：**
+
+在现有基础同步能力之上，优先提升视频定时精度与同步稳定性，使 PlayerLab 的 AV sync 行为更接近 ffplay。
+
+**重点：**
+
+- 精确定时唤醒替代固定 15ms Wait 轮询
+- `frame_timer` 风格的视频显示时间线
+- 连续 delay 校正替代硬阈值 Wait/Drop
+- 音频输出缓冲延迟补偿
+- 保持现有 `PlaybackClock / AVSynchronizer / PlayerController` 架构渐进演化
+
+**不做：**
+
+- packet/frame serial 机制
+- seek 后 flush-only 架构改造
+- 音频 sample 拉伸/压缩
+- 完整复制 ffplay 内部实现
+
+**备注：**
+
+这是一个插入到 `Iteration 07` 之后的补充重构迭代。
+
+使用 `07A` 而不是整体重编号，目的是保持已完成 iteration 与未来 roadmap 引用稳定。
+
+---
+
 ## Iteration 08
 
 Network Playback

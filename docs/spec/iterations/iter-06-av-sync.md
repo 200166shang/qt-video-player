@@ -4,6 +4,20 @@
 
 实现基础音视频同步。
 
+## 说明
+
+本 iteration 定义的是“最小可用同步”。
+
+如果要继续向 ffplay 风格演进，例如：
+
+- 精确定时唤醒
+- 连续 delay 校正
+- 音频输出延迟补偿
+
+请参考后续补充迭代：
+
+- `docs/spec/iterations/iter-07a-av-sync-refactor-ffplay.md`
+
 ## 同步策略
 
 ```text
@@ -42,4 +56,3 @@ AVSynchronizer
 3. Seek 后能重新同步。
 4. 无音频视频也能正常播放。
 ```
-
