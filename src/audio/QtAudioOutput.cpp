@@ -100,6 +100,13 @@ void QtAudioOutput::stop() {
     pendingOffset_ = 0;
 }
 
+std::optional<double> QtAudioOutput::playedSeconds() const {
+    if (sink_ == nullptr) {
+        return std::nullopt;
+    }
+    return static_cast<double>(sink_->processedUSecs()) / 1000000.0;
+}
+
 void QtAudioOutput::flushPending() {
     if (sink_ == nullptr || ioDevice_ == nullptr || pendingOffset_ >= pendingData_.size()) {
         return;

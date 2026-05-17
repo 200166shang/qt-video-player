@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
 #include <QOpenGLWidget>
@@ -21,4 +22,5 @@ protected:
 
 private:
     std::unique_ptr<IVideoRenderer> renderer_;
+    std::uint64_t debugFrameReceivedCount_ = 0;
 };

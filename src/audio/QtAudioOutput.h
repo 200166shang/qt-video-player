@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <QAudioFormat>
@@ -28,6 +29,7 @@ public:
     void pause() override;
     void resume() override;
     void stop() override;
+    [[nodiscard]] std::optional<double> playedSeconds() const override;
 
 private:
     void flushPending();

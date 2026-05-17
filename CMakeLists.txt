@@ -75,6 +75,10 @@ add_executable(playerlab
     src/core/MediaSource.h
     src/core/VideoFrame.h
     src/core/AudioFrame.h
+    src/core/PlaybackClock.h
+    src/core/PlaybackClock.cpp
+    src/core/AVSynchronizer.h
+    src/core/AVSynchronizer.cpp
     src/core/PlayerController.h
     src/core/PlayerController.cpp
     src/audio/IAudioOutput.h

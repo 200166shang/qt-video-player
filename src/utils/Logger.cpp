@@ -7,6 +7,7 @@ namespace playerlab::utils {
 
 namespace {
 constexpr const char* kLoggerName = "playerlab";
+bool gPipelineDebugEnabled = false;
 }
 
 void Logger::init() {
@@ -37,6 +38,14 @@ void Logger::setLevel(const std::string& level) {
     const auto parsed = spdlog::level::from_str(level);
     logger->set_level(parsed);
     spdlog::set_level(parsed);
+}
+
+void Logger::setPipelineDebugEnabled(const bool enabled) {
+    gPipelineDebugEnabled = enabled;
+}
+
+bool Logger::isPipelineDebugEnabled() {
+    return gPipelineDebugEnabled;
 }
 
 }  // namespace playerlab::utils

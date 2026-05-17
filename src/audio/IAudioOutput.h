@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "core/AudioFrame.h"
 
 namespace playerlab::audio {
@@ -17,6 +19,7 @@ public:
     virtual void pause() = 0;
     virtual void resume() = 0;
     virtual void stop() = 0;
+    [[nodiscard]] virtual std::optional<double> playedSeconds() const = 0;
 };
 
 }  // namespace playerlab::audio

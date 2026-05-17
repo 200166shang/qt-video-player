@@ -14,6 +14,8 @@ public:
     static void init();
     static std::shared_ptr<spdlog::logger> get();
     static void setLevel(const std::string& level);
+    static void setPipelineDebugEnabled(bool enabled);
+    [[nodiscard]] static bool isPipelineDebugEnabled();
 };
 
 }  // namespace playerlab::utils

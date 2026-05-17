@@ -179,6 +179,41 @@
 
 ---
 
+## Iteration 06: Basic AV Sync
+
+### Date
+
+2026-05-09
+
+### Summary
+
+实现基础音视频同步：有音频时使用音频主时钟，无音频时使用系统时钟，并基于视频 PTS 与主时钟差值进行等待/显示/丢帧调度。
+
+### Added
+
+- `src/core/PlaybackClock.*`（播放时钟：音频主时钟/系统时钟、pause/resume 时钟连续性）
+- `src/core/AVSynchronizer.*`（视频同步决策：Wait/Display/Drop）
+
+### Changed
+
+- `src/core/PlayerController.*` 接入 AV 同步调度：
+  - 音频泵写入后更新音频时钟
+  - 视频泵按 `video_pts - master_clock` 决策等待/显示/丢帧
+  - 暂停时停止视频推进并冻结时钟，恢复后继续同步
+  - 打开/停止时重置同步状态，支持后续 seek/reset 场景的重同步
+- `CMakeLists.txt` 纳入 Iteration 06 新增源文件
+
+### Fixed
+
+- 修复暂停仅作用于音频导致的视频继续推进问题，避免 pause/resume 后明显失同步。
+
+### Notes
+
+- 验证通过：`cmake --build build -j8` 成功
+- 当前未新增 seek UI/完整播放状态机（仍属于 Iteration 07 范围）
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

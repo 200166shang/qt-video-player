@@ -3,11 +3,19 @@
 #include <cmath>
 
 #include "../render/RendererFactory.h"
+#include "utils/Logger.h"
 
 OpenGLVideoWidget::OpenGLVideoWidget(QWidget* parent) : QOpenGLWidget(parent) {}
 
 void OpenGLVideoWidget::setVideoFrame(const playerlab::core::VideoFrame& frame) {
     if (renderer_) {
+        if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+            ++debugFrameReceivedCount_;
+            if (debugFrameReceivedCount_ == 1 || (debugFrameReceivedCount_ % 120) == 0) {
+                LOG_TRACE("VideoWidget frame: count={} size={}x{} pts={:.3f}s validYuv420p={}",
+                          debugFrameReceivedCount_, frame.width, frame.height, frame.ptsSec, frame.isValidYuv420p());
+            }
+        }
         renderer_->setVideoFrame(frame);
         update();
     }
