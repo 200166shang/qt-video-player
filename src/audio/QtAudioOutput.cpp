@@ -107,6 +107,21 @@ std::optional<double> QtAudioOutput::playedSeconds() const {
     return static_cast<double>(sink_->processedUSecs()) / 1000000.0;
 }
 
+double QtAudioOutput::outputLatencySeconds() const {
+    if (sink_ == nullptr || !format_.isValid()) {
+        return 0.0;
+    }
+
+    const qint32 bytesPerFrame = format_.bytesPerFrame();
+    const int sampleRate = format_.sampleRate();
+    if (bytesPerFrame <= 0 || sampleRate <= 0) {
+        return 0.0;
+    }
+
+    const qint64 queuedBytes = std::max<qint64>(0, sink_->bufferSize() - sink_->bytesFree());
+    return static_cast<double>(queuedBytes) / static_cast<double>(bytesPerFrame * sampleRate);
+}
+
 void QtAudioOutput::flushPending() {
     if (sink_ == nullptr || ioDevice_ == nullptr || pendingOffset_ >= pendingData_.size()) {
         return;

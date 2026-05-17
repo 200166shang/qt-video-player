@@ -251,6 +251,43 @@
 
 ---
 
+## Iteration 07A: AV Sync Refactor toward ffplay
+
+### Date
+
+2026-05-17
+
+### Summary
+
+在不改动主时钟架构的前提下，将 AV sync 从固定轮询+硬阈值策略演进为更接近 ffplay 的连续延迟校正与精确定时唤醒。
+
+### Added
+
+- `IAudioOutput::outputLatencySeconds()` 接口，用于查询音频输出缓冲延迟
+- `PlayerController` 视频时间线状态：`frameTimerSec_ / lastFrameDurationSec_ / frameWakePending_`
+- `PlayerController` 一次性唤醒调度工具：`delayToWaitMs`、`scheduleFrameWake`、`resetFrameTimeline`
+
+### Changed
+
+- `AVSynchronizer` 从 `Wait/Display/Drop` 决策接口改为 `computeTargetDelay(...)` 连续延迟模型
+- `PlayerController::onFramePump` 改为基于 `targetDelay + frameTimer` 的显示调度：
+  - 未到显示时刻时使用 `QTimer::singleShot` 精确定时唤醒
+  - 帧明显迟到时执行有限度丢帧追赶，避免持续抖动
+- 音频主时钟更新路径加入输出延迟补偿：`playedSeconds - outputLatencySeconds`
+- AV 同步调试日志扩展 `late/frameTimer/lastDur` 等关键可观测字段
+
+### Fixed
+
+- 缓解固定 `15ms` tick 导致的视频显示节拍受限问题
+- 缓解音频硬件缓冲存在时视频系统性超前问题
+
+### Notes
+
+- 验证通过：`cmake --build build` 成功
+- 本迭代明确未引入 serial、flush-only seek、sample 级音频补偿，保持在 07A scope
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

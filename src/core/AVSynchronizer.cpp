@@ -1,28 +1,29 @@
 #include "core/AVSynchronizer.h"
 
 #include <algorithm>
-#include <cmath>
 
 namespace playerlab::core {
 
-AVSynchronizer::VideoDecision AVSynchronizer::decideVideoFrame(const double videoPtsSec, const double masterClockSec) const {
-    VideoDecision decision;
-    decision.diffMs = (videoPtsSec - masterClockSec) * 1000.0;
+double AVSynchronizer::computeTargetDelay(const double baseDelaySec, const double videoPtsSec,
+                                          const double masterClockSec) const {
+    const double safeBaseDelay = std::clamp(baseDelaySec, kMinDelaySec, kMaxDelaySec);
+    const double diffSec = videoPtsSec - masterClockSec;
 
-    if (decision.diffMs > kSyncThresholdMs) {
-        decision.action = VideoAction::Wait;
-        const int waitMs = static_cast<int>(std::lround(decision.diffMs));
-        decision.waitMs = std::clamp(waitMs, 1, kMaxWaitMs);
-        return decision;
+    // Tiny drift: keep cadence stable, avoid boundary oscillation.
+    if (std::abs(diffSec) <= kNoAdjustThresholdSec) {
+        return safeBaseDelay;
     }
 
-    if (decision.diffMs < -kSyncThresholdMs) {
-        decision.action = VideoAction::Drop;
-        return decision;
+    if (diffSec > kSyncThresholdSec) {
+        return std::clamp(safeBaseDelay + diffSec, kMinDelaySec, kMaxDelaySec);
     }
 
-    decision.action = VideoAction::Display;
-    return decision;
+    if (diffSec < -kSyncThresholdSec) {
+        return kMinDelaySec;
+    }
+
+    const double adjustedDelay = safeBaseDelay + diffSec;
+    return std::clamp(adjustedDelay, kMinDelaySec, kMaxDelaySec);
 }
 
 }  // namespace playerlab::core

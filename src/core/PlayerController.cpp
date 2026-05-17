@@ -61,6 +61,7 @@ void PlayerController::play() {
 
     if (playbackState_ == PlaybackState::Paused) {
         playbackClock_.onPauseChanged(false);
+        frameWakePending_ = false;
         if (audioOutput_ != nullptr) {
             audioOutput_->resume();
         }
@@ -85,6 +86,7 @@ void PlayerController::pause() {
     }
 
     playbackClock_.onPauseChanged(true);
+    frameWakePending_ = false;
     if (audioOutput_ != nullptr) {
         audioOutput_->pause();
     }
@@ -103,6 +105,7 @@ void PlayerController::togglePlayPause() {
 void PlayerController::stop() {
     teardownPipeline();
     playbackClock_.reset(false);
+    resetFrameTimeline();
     pendingVideoFrame_.reset();
     firstAudioPtsSec_.reset();
     updateState(PlaybackState::Stopped);
@@ -121,6 +124,7 @@ void PlayerController::seek(const double targetSec) {
     }
 
     if (shouldResume) {
+        frameWakePending_ = false;
         updateState(PlaybackState::Playing);
         return;
     }
@@ -244,12 +248,14 @@ bool PlayerController::startPipeline(const double startPositionSec, const bool r
     }
 
     pendingVideoFrame_.reset();
+    resetFrameTimeline();
     firstAudioPtsSec_.reset();
     lastSyncLogAt_ = std::chrono::steady_clock::now();
     debugVideoDisplayCount_ = 0;
     debugVideoDropCount_ = 0;
     debugVideoWaitCount_ = 0;
     debugAudioPumpCount_ = 0;
+    debugVideoLateCount_ = 0;
 
     if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
         LOG_DEBUG("Playback open: path='{}' hasVideo={} hasAudio={} durationSec={:.3f} seek={:.3f}", currentSource_.uri,
@@ -281,6 +287,7 @@ void PlayerController::teardownPipeline() {
     }
 
     pendingVideoFrame_.reset();
+    frameWakePending_ = false;
     firstAudioPtsSec_.reset();
     hasAudio_ = false;
 
@@ -326,6 +333,7 @@ void PlayerController::onFramePump() {
     if (playbackState_ != PlaybackState::Playing) {
         return;
     }
+    frameWakePending_ = false;
 
     if (!pendingVideoFrame_.has_value()) {
         playerlab::core::VideoFrame frame;
@@ -341,53 +349,62 @@ void PlayerController::onFramePump() {
         playbackClock_.ensureSystemClockStarted(pendingVideoFrame_->ptsSec);
     }
 
+    if (frameTimerSec_ <= 0.0) {
+        frameTimerSec_ = pendingVideoFrame_->ptsSec;
+    }
+
     constexpr int kMaxDropsPerTick = 5;
     int dropCount = 0;
     while (pendingVideoFrame_.has_value()) {
         const double masterClockSec = playbackClock_.masterClockSec();
-        const playerlab::core::AVSynchronizer::VideoDecision decision =
-            avSynchronizer_.decideVideoFrame(pendingVideoFrame_->ptsSec, masterClockSec);
+        const double framePtsSec = pendingVideoFrame_->ptsSec;
+        const double baseDelaySec = std::clamp(framePtsSec - frameTimerSec_, 1.0 / 120.0, 0.1);
+        lastFrameDurationSec_ = baseDelaySec;
+        const double targetDelaySec = avSynchronizer_.computeTargetDelay(baseDelaySec, framePtsSec, masterClockSec);
+        const double targetDisplayTimeSec = frameTimerSec_ + targetDelaySec;
+        const double waitSec = targetDisplayTimeSec - masterClockSec;
+
         if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
-            maybeLogSyncStats(masterClockSec, pendingVideoFrame_->ptsSec);
+            maybeLogSyncStats(masterClockSec, framePtsSec);
         }
 
-        if (decision.action == playerlab::core::AVSynchronizer::VideoAction::Wait) {
+        if (waitSec > 0.001) {
             if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
                 ++debugVideoWaitCount_;
             }
+            scheduleFrameWake(delayToWaitMs(waitSec));
             publishPosition();
             maybeTransitionToEnded();
             return;
         }
 
-        if (decision.action == playerlab::core::AVSynchronizer::VideoAction::Display) {
+        if (waitSec < -std::max(lastFrameDurationSec_, 0.03) && dropCount < kMaxDropsPerTick) {
             if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
-                ++debugVideoDisplayCount_;
+                ++debugVideoDropCount_;
+                ++debugVideoLateCount_;
             }
-            emit videoFrameReady(*pendingVideoFrame_);
+            frameTimerSec_ = targetDisplayTimeSec;
             pendingVideoFrame_.reset();
-            publishPosition();
-            maybeTransitionToEnded();
-            return;
+            playerlab::core::VideoFrame nextFrame;
+            if (!videoDecoder_.tryPopFrame(nextFrame)) {
+                publishPosition();
+                maybeTransitionToEnded();
+                return;
+            }
+            pendingVideoFrame_ = std::move(nextFrame);
+            ++dropCount;
+            continue;
         }
 
         if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
-            ++debugVideoDropCount_;
+            ++debugVideoDisplayCount_;
         }
+        frameTimerSec_ = targetDisplayTimeSec;
+        emit videoFrameReady(*pendingVideoFrame_);
         pendingVideoFrame_.reset();
-        playerlab::core::VideoFrame nextFrame;
-        if (!videoDecoder_.tryPopFrame(nextFrame)) {
-            publishPosition();
-            maybeTransitionToEnded();
-            return;
-        }
-        pendingVideoFrame_ = std::move(nextFrame);
-        ++dropCount;
-        if (dropCount >= kMaxDropsPerTick) {
-            publishPosition();
-            maybeTransitionToEnded();
-            return;
-        }
+        publishPosition();
+        maybeTransitionToEnded();
+        return;
     }
 }
 
@@ -412,14 +429,17 @@ void PlayerController::onAudioPump() {
     if (firstAudioPtsSec_.has_value()) {
         const std::optional<double> playedSec = audioOutput_->playedSeconds();
         if (playedSec.has_value()) {
-            playbackClock_.updateAudioClock(*firstAudioPtsSec_ + *playedSec * playbackRate_);
+            const double latencySec = std::max(0.0, audioOutput_->outputLatencySeconds());
+            const double effectivePlayed = std::max(0.0, *playedSec - latencySec);
+            playbackClock_.updateAudioClock(*firstAudioPtsSec_ + effectivePlayed * playbackRate_);
             if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
                 ++debugAudioPumpCount_;
                 if ((debugAudioPumpCount_ % 50) == 0) {
                     LOG_TRACE(
-                        "Audio clock: firstPts={:.3f}s played={:.3f}s speed={:.2f} masterFromAudio={:.3f}s queuedFramesPerTick={}"
+                        "Audio clock: firstPts={:.3f}s played={:.3f}s latency={:.3f}s effective={:.3f}s speed={:.2f} masterFromAudio={:.3f}s queuedFramesPerTick={}"
                         ,
-                        *firstAudioPtsSec_, *playedSec, playbackRate_, *firstAudioPtsSec_ + *playedSec * playbackRate_,
+                        *firstAudioPtsSec_, *playedSec, latencySec, effectivePlayed, playbackRate_,
+                        *firstAudioPtsSec_ + effectivePlayed * playbackRate_,
                         frameCount);
                 }
             }
@@ -479,13 +499,37 @@ void PlayerController::maybeLogSyncStats(const double masterClockSec, const doub
     }
 
     const double diffMs = (videoPtsSec - masterClockSec) * 1000.0;
-    LOG_DEBUG("AV sync stats(1s): display={} drop={} wait={} master={:.3f}s video={:.3f}s diff={:.1f}ms",
-              debugVideoDisplayCount_, debugVideoDropCount_, debugVideoWaitCount_, masterClockSec, videoPtsSec, diffMs);
+    LOG_DEBUG("AV sync stats(1s): display={} drop={} wait={} late={} master={:.3f}s video={:.3f}s diff={:.1f}ms frameTimer={:.3f}s lastDur={:.3f}s",
+              debugVideoDisplayCount_, debugVideoDropCount_, debugVideoWaitCount_, debugVideoLateCount_,
+              masterClockSec, videoPtsSec, diffMs, frameTimerSec_, lastFrameDurationSec_);
 
     debugVideoDisplayCount_ = 0;
     debugVideoDropCount_ = 0;
     debugVideoWaitCount_ = 0;
+    debugVideoLateCount_ = 0;
     lastSyncLogAt_ = now;
+}
+
+int PlayerController::delayToWaitMs(const double delaySec) {
+    const int waitMs = static_cast<int>(std::lround(delaySec * 1000.0));
+    return std::clamp(waitMs, 1, 250);
+}
+
+void PlayerController::scheduleFrameWake(const int waitMs) {
+    if (frameWakePending_) {
+        return;
+    }
+    frameWakePending_ = true;
+    QTimer::singleShot(waitMs, this, [this]() {
+        frameWakePending_ = false;
+        onFramePump();
+    });
+}
+
+void PlayerController::resetFrameTimeline() {
+    frameTimerSec_ = 0.0;
+    lastFrameDurationSec_ = 1.0 / 30.0;
+    frameWakePending_ = false;
 }
 
 }  // namespace playerlab::core

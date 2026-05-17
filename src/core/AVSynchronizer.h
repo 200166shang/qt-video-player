@@ -4,23 +4,13 @@ namespace playerlab::core {
 
 class AVSynchronizer {
 public:
-    enum class VideoAction {
-        Wait,
-        Display,
-        Drop,
-    };
-
-    struct VideoDecision {
-        VideoAction action = VideoAction::Display;
-        double diffMs = 0.0;
-        int waitMs = 0;
-    };
-
-    [[nodiscard]] VideoDecision decideVideoFrame(double videoPtsSec, double masterClockSec) const;
+    [[nodiscard]] double computeTargetDelay(double baseDelaySec, double videoPtsSec, double masterClockSec) const;
 
 private:
-    static constexpr double kSyncThresholdMs = 40.0;
-    static constexpr int kMaxWaitMs = 100;
+    static constexpr double kMinDelaySec = 0.004;
+    static constexpr double kMaxDelaySec = 0.100;
+    static constexpr double kNoAdjustThresholdSec = 0.010;
+    static constexpr double kSyncThresholdSec = 0.100;
 };
 
 }  // namespace playerlab::core

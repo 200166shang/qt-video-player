@@ -73,6 +73,9 @@ private:
     [[nodiscard]] static double clampPlaybackRate(double rate);
     [[nodiscard]] double clampSeekTarget(double targetSec) const;
     void maybeLogSyncStats(double masterClockSec, double videoPtsSec);
+    [[nodiscard]] static int delayToWaitMs(double delaySec);
+    void scheduleFrameWake(int waitMs);
+    void resetFrameTimeline();
 
     playerlab::ffmpeg::FFmpegDemuxer demuxer_;
     playerlab::ffmpeg::FFmpegVideoDecoder videoDecoder_;
@@ -83,6 +86,9 @@ private:
     std::optional<playerlab::core::VideoFrame> pendingVideoFrame_;
     playerlab::core::PlaybackClock playbackClock_;
     playerlab::core::AVSynchronizer avSynchronizer_;
+    double frameTimerSec_ = 0.0;
+    double lastFrameDurationSec_ = 1.0 / 30.0;
+    bool frameWakePending_ = false;
 
     playerlab::core::MediaSource currentSource_;
     playerlab::core::MediaInfo currentMediaInfo_;
@@ -102,6 +108,7 @@ private:
     std::uint64_t debugVideoDropCount_ = 0;
     std::uint64_t debugVideoWaitCount_ = 0;
     std::uint64_t debugAudioPumpCount_ = 0;
+    std::uint64_t debugVideoLateCount_ = 0;
 };
 
 }  // namespace playerlab::core

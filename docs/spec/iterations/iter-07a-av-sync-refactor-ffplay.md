@@ -29,6 +29,17 @@
 2. 再把硬阈值决策演进为连续延迟校正
 3. 最后补上音频输出延迟补偿
 
+### 2.1 Design Baseline (PlayerLab vs ffplay)
+
+本 iteration 开始前，基线差异如下：
+
+- 视频 Wait 依赖固定 `15ms` 轮询，无法按帧目标时刻精确唤醒
+- 同步决策是 `Wait/Display/Drop` 硬阈值分支，边界附近容易抖动
+- 音频主时钟只基于 `playedSeconds`，未扣除输出缓冲延迟
+- seek 后仍以 pipeline reset 为主，尚未引入 serial / flush-only 机制
+
+本轮只对前 3 项做受控改进，第 4 项保持不变并显式留给后续迭代。
+
 ---
 
 ## 3. Scope
@@ -155,15 +166,17 @@ bool frameWakePending_ = false;
 
 ### Date
 
-YYYY-MM-DD
+2026-05-17
 
 ### Summary
 
-一句话总结完成内容。
+完成 AV sync 渐进重构：视频改为一次性定时唤醒 + 连续 delay 校正，并加入音频输出延迟补偿。
 
 ### Verification
 
-确认验收标准全部满足。
+- `cmake --build build` 通过，主程序与 probe target 均成功编译
+- 关键实现已落地：`singleShot` 唤醒、`frameTimer` 时间线、连续 delay 计算、audio latency 扣除、调试日志增强
+- 未引入 serial / flush-only / sample 补偿，保持在本 iteration scope 内
 
 ### Notes
 

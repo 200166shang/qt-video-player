@@ -30,6 +30,7 @@ public:
     void resume() override;
     void stop() override;
     [[nodiscard]] std::optional<double> playedSeconds() const override;
+    [[nodiscard]] double outputLatencySeconds() const override;
 
 private:
     void flushPending();

@@ -20,6 +20,7 @@ public:
     virtual void resume() = 0;
     virtual void stop() = 0;
     [[nodiscard]] virtual std::optional<double> playedSeconds() const = 0;
+    [[nodiscard]] virtual double outputLatencySeconds() const = 0;
 };
 
 }  // namespace playerlab::audio
