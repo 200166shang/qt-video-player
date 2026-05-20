@@ -288,6 +288,47 @@
 
 ---
 
+## Iteration 07B: Player Core Threading Refactor
+
+### Date
+
+2026-05-20
+
+### Summary
+
+将播放核心从 UI 线程拆出到独立 `PlayerCore` 线程，建立单一 read worker + 分离式 audio/video decode worker 的基础播放管线。
+
+### Added
+
+- `src/core/PlaybackState.h`，抽出共享播放状态枚举
+- `src/core/PlayerCore.*`，承接播放状态机、pipeline 生命周期、AV sync 调度、audio pump/video refresh
+- `src/ffmpeg/FFmpegReadWorker.*`，单一媒体读取线程，统一 `av_read_frame` 并分发 packet
+
+### Changed
+
+- `src/core/PlayerController.*` 从播放核心改为 UI facade，通过 `QThread + Qt::QueuedConnection` 异步派发控制命令
+- `src/ffmpeg/FFmpegVideoDecoder.*` 移除内部 input ownership / demux thread，改为只消费外部 video packet queue 并输出 frame queue
+- `src/ffmpeg/FFmpegAudioDecoder.*` 移除内部 input ownership / demux thread，改为只消费外部 audio packet queue 并输出 frame queue
+- `src/ffmpeg/PacketQueue.h` 增加有界等待推送能力，供 read worker 在 queue 积压时限流
+- `src/ui/ControlBar.*`、`src/ui/MainWindow.cpp` 切换到新的共享 `PlaybackState`
+- `src/tools/DecodeProbe.cpp` 改为走新的 read worker + decoder 管线
+- `CMakeLists.txt` 纳入 `PlayerCore`、`PlaybackState`、`FFmpegReadWorker` 等新增文件
+
+### Fixed
+
+- 消除 UI 线程直接持有并驱动 demux/decode/pump 的结构问题
+- 消除 audio/video decoder 各自打开输入源、各自 `av_read_frame` 的重复 demux 结构
+
+### Notes
+
+- 验证通过：`cmake --build build -j4` 成功
+- 验证通过：`./bin/playerlab_decode_probe "testdata/雨爱 - 杨丞琳.mp4"` 成功输出前 10 帧
+- 已做启动烟测：`./bin/playerlab` 可启动并输出初始化日志
+- 受当前无自动化桌面交互回路限制，本轮未在本地自动脚本中完整覆盖 open/play/pause/resume/seek/stop 的 GUI 交互验收；该部分仍建议手动回归
+- 本迭代仍保持 seek 通过 pipeline teardown/restart 的临时策略，未扩展到 flush-only / serial 机制
+
+---
+
 # Changelog Template
 
 ## Iteration XX: Title

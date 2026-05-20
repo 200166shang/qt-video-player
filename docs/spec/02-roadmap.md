@@ -248,6 +248,40 @@ AV Sync Refactor toward ffplay
 
 ---
 
+## Iteration 07B
+
+Player Core Threading Refactor
+
+**目标：**
+
+在继续网络播放、字幕、硬解等功能迭代前，先把播放核心从 UI 线程中拆出，建立 `PlayerCore` 管理的多线程播放管线。
+
+**重点：**
+
+- `PlayerController` 瘦身为 UI-facing facade
+- 新增 `PlayerCore` 线程承接状态机与 pipeline 生命周期
+- 单一 read/demux worker 统一 `av_read_frame`
+- video/audio decoder 只消费 packet queue 并输出 frame queue
+- 视频 refresh / AV sync 调度迁移出 UI 线程
+- OpenGL 渲染继续留在主线程 `QOpenGLWidget`
+
+**不做：**
+
+- 独立 OpenGL render thread
+- shared OpenGL context
+- 硬件解码
+- subtitle pipeline
+- ffplay serial / flush-only seek
+- 音频 sample 级补偿
+
+**备注：**
+
+这是插入到 `Iteration 08: Network Playback` 前的架构重构迭代。
+
+使用 `07B` 而不是整体重编号，目的是保持已完成 iteration 与未来 roadmap 引用稳定。
+
+---
+
 ## Iteration 08
 
 Network Playback

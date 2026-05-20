@@ -60,14 +60,14 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     syncPlayPauseButtonText();
 }
 
-void ControlBar::setPlaybackState(const playerlab::core::PlayerController::PlaybackState state) {
+void ControlBar::setPlaybackState(const playerlab::core::PlaybackState state) {
     playbackState_ = state;
     syncPlayPauseButtonText();
 
-    if (playbackState_ == playerlab::core::PlayerController::PlaybackState::Stopped) {
+    if (playbackState_ == playerlab::core::PlaybackState::Stopped) {
         setProgress(0.0, durationSec_);
     }
-    if (playbackState_ == playerlab::core::PlayerController::PlaybackState::Ended) {
+    if (playbackState_ == playerlab::core::PlaybackState::Ended) {
         setProgress(durationSec_, durationSec_);
     }
 }
@@ -180,16 +180,16 @@ void ControlBar::updateTimeLabel(const double currentSec) {
 
 void ControlBar::syncPlayPauseButtonText() {
     switch (playbackState_) {
-    case playerlab::core::PlayerController::PlaybackState::Stopped:
+    case playerlab::core::PlaybackState::Stopped:
         playPauseButton_->setText("Play");
         break;
-    case playerlab::core::PlayerController::PlaybackState::Playing:
+    case playerlab::core::PlaybackState::Playing:
         playPauseButton_->setText("Pause");
         break;
-    case playerlab::core::PlayerController::PlaybackState::Paused:
+    case playerlab::core::PlaybackState::Paused:
         playPauseButton_->setText("Resume");
         break;
-    case playerlab::core::PlayerController::PlaybackState::Ended:
+    case playerlab::core::PlaybackState::Ended:
         playPauseButton_->setText("Replay");
         break;
     }

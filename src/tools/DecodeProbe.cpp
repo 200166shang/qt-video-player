@@ -11,8 +11,10 @@
 #include <thread>
 
 #include "core/MediaSource.h"
+#include "core/MediaInfo.h"
 #include "core/VideoFrame.h"
 #include "ffmpeg/FFmpegGlobal.h"
+#include "ffmpeg/FFmpegReadWorker.h"
 #include "ffmpeg/FFmpegVideoDecoder.h"
 
 namespace {
@@ -78,13 +80,22 @@ void probeOpenGL() {
 void probeDecode(const std::string& uri) {
     playerlab::ffmpeg::FFmpegGlobal::initialize();
 
+    playerlab::ffmpeg::FFmpegReadWorker readWorker;
     playerlab::ffmpeg::FFmpegVideoDecoder decoder;
     playerlab::core::MediaSource source{.uri = uri};
+    playerlab::core::MediaInfo info;
     std::string error;
-    if (!decoder.open(source, error)) {
+    if (!readWorker.open(source, info, error)) {
+        std::cout << "[decode] read worker open failed: " << error << "\n";
+        return;
+    }
+    playerlab::ffmpeg::PacketQueue<AVPacket*> videoPacketQueue;
+    if (!decoder.open(readWorker.videoCodecParameters(), readWorker.videoTimeBase(), error)) {
         std::cout << "[decode] open failed: " << error << "\n";
         return;
     }
+    readWorker.start(&videoPacketQueue, nullptr);
+    decoder.start(&videoPacketQueue);
 
     std::cout << "[decode] open ok\n";
     int frames = 0;
@@ -106,6 +117,7 @@ void probeDecode(const std::string& uri) {
     }
 
     decoder.stop();
+    readWorker.stop();
     std::cout << "[decode] total frames collected=" << frames << "\n";
 }
 

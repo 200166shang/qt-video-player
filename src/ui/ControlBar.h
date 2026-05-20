@@ -15,7 +15,7 @@ class ControlBar : public QWidget {
 public:
     explicit ControlBar(QWidget* parent = nullptr);
 
-    void setPlaybackState(playerlab::core::PlayerController::PlaybackState state);
+    void setPlaybackState(playerlab::core::PlaybackState state);
     void setProgress(double currentSec, double durationSec);
     void setDuration(double durationSec);
     void setPlaybackRate(double rate);
@@ -54,8 +54,7 @@ private:
     QLabel* timeLabel_ = nullptr;
     QComboBox* speedCombo_ = nullptr;
 
-    playerlab::core::PlayerController::PlaybackState playbackState_ =
-        playerlab::core::PlayerController::PlaybackState::Stopped;
+    playerlab::core::PlaybackState playbackState_ = playerlab::core::PlaybackState::Stopped;
     bool muted_ = false;
     bool seeking_ = false;
     double durationSec_ = 0.0;

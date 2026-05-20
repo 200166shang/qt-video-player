@@ -110,7 +110,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 mediaInfoPanel_->setError(error);
             });
     connect(playerController_, &playerlab::core::PlayerController::playbackStateChanged, this,
-            [this](const playerlab::core::PlayerController::PlaybackState state) {
+            [this](const playerlab::core::PlaybackState state) {
                 if (controlBar_ != nullptr) {
                     controlBar_->setPlaybackState(state);
                 }

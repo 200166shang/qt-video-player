@@ -52,6 +52,8 @@ add_library(playerlab_ffmpeg STATIC
     src/ffmpeg/FFmpegProbe.cpp
     src/ffmpeg/PacketQueue.h
     src/ffmpeg/FrameQueue.h
+    src/ffmpeg/FFmpegReadWorker.h
+    src/ffmpeg/FFmpegReadWorker.cpp
     src/ffmpeg/FFmpegVideoDecoder.h
     src/ffmpeg/FFmpegVideoDecoder.cpp
     src/ffmpeg/FFmpegResampler.h
@@ -75,10 +77,13 @@ add_executable(playerlab
     src/core/MediaSource.h
     src/core/VideoFrame.h
     src/core/AudioFrame.h
+    src/core/PlaybackState.h
     src/core/PlaybackClock.h
     src/core/PlaybackClock.cpp
     src/core/AVSynchronizer.h
     src/core/AVSynchronizer.cpp
+    src/core/PlayerCore.h
+    src/core/PlayerCore.cpp
     src/core/PlayerController.h
     src/core/PlayerController.cpp
     src/audio/IAudioOutput.h
@@ -126,10 +131,11 @@ add_executable(playerlab_decode_probe
     src/tools/DecodeProbe.cpp
     src/core/MediaSource.h
     src/core/VideoFrame.h
+    src/core/MediaInfo.h
     src/ffmpeg/FFmpegGlobal.h
     src/ffmpeg/FFmpegGlobal.cpp
-    src/ffmpeg/PacketQueue.h
-    src/ffmpeg/FrameQueue.h
+    src/ffmpeg/FFmpegReadWorker.h
+    src/ffmpeg/FFmpegReadWorker.cpp
     src/ffmpeg/FFmpegVideoDecoder.h
     src/ffmpeg/FFmpegVideoDecoder.cpp
 )

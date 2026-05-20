@@ -122,3 +122,89 @@ AV sync 重构采用“渐进式对齐 ffplay”的策略：
 - `docs/spec/02-roadmap.md`
 - `docs/spec/iterations/iter-07a-av-sync-refactor-ffplay.md`
 - 相关实现文件与完成后的 changelog
+
+---
+
+## ADR-0002: 插入 Player Core 线程模型重构
+
+### Status
+
+Accepted
+
+### Context
+
+PlayerLab 当前已经具备基础播放、播放控制与 AV sync 能力，但播放核心仍与 UI 线程耦合较深：
+
+- `PlayerController` 直接管理 pipeline 生命周期、音频 pump、视频 frame pump 与状态机
+- video/audio decoder 各自打开输入源，并各自执行 `av_read_frame`
+- UI 线程仍通过 timer 驱动部分播放核心逻辑
+- 后续网络播放、字幕同步、硬解、flush-only seek 会放大这些结构问题
+
+如果继续直接推进功能迭代，后续功能会更容易堆叠在当前 `PlayerController` 上，增加回归与重构成本。
+
+### Decision
+
+在 `Iteration 08: Network Playback` 前插入 `Iteration 07B: Player Core Threading Refactor`。
+
+该重构采用渐进方式：
+
+1. 保留 `PlayerController` 作为 UI-facing facade
+2. 新增独立 `PlayerCore`，承接播放状态机与 pipeline 生命周期
+3. 使用 Qt queued connection / event loop 作为 UI 到 core 的命令队列
+4. 引入单一 read/demux worker，统一读取输入源并分发 packet
+5. 将 video/audio decoder 收窄为 packet queue 到 frame queue 的 worker
+6. OpenGL 渲染暂时继续留在主线程 `QOpenGLWidget`
+7. 独立 OpenGL render thread、serial、flush-only seek、audio sample compensation 留给后续迭代
+
+### Consequences
+
+- roadmap 需要插入一个补充重构 iteration
+- `PlayerController` 职责会明显变薄
+- FFmpeg read/demux ownership 会从 decoder 内迁移到 read worker / core 管理
+- decoder 接口会发生结构性变化
+- queue 生命周期、teardown 顺序、seek reset 策略需要重新梳理
+- 后续 `Iteration 08: Network Playback` 可以基于更清晰的 core/read/decode 边界实现
+
+### Alternatives Considered
+
+#### 方案 A：直接继续做 Network Playback
+
+优点：
+
+- 短期功能推进最快
+
+缺点：
+
+- 网络超时、阻塞 read、reconnect、HLS 等问题会直接压到当前 UI-thread-heavy 架构上
+- 后续回头重构成本更高
+
+#### 方案 B：一次性实现完整 ffplay 风格管线
+
+优点：
+
+- 长期结构最完整
+
+缺点：
+
+- 改动过大
+- 容易同时引入 serial、flush、audio compensation、独立 render thread 等多个风险点
+- 不符合当前项目的小步可验证节奏
+
+#### 方案 C：只把 `PlayerController` moveToThread
+
+优点：
+
+- 改动较小
+
+缺点：
+
+- 无法解决双 demux、decoder ownership、queue 生命周期等核心问题
+- 只是移动线程位置，不是真正梳理播放管线职责
+
+### Follow-up
+
+需要更新：
+
+- `docs/spec/02-roadmap.md`
+- `docs/spec/iterations/iter-07b-player-core-threading-refactor.md`
+- 完成实现后更新 `docs/spec/04-changelog.md`

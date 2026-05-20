@@ -2,7 +2,6 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 }
 
@@ -25,57 +24,45 @@ FFmpegVideoDecoder::~FFmpegVideoDecoder() {
     stop();
 }
 
-bool FFmpegVideoDecoder::open(const playerlab::core::MediaSource& source, std::string& outError,
-                              const double startPositionSec) {
+bool FFmpegVideoDecoder::open(const AVCodecParameters* codecParameters, const AVRational timeBase,
+                              std::string& outError) {
     stop();
-    packetQueue_.reset();
     frameQueue_.reset();
-    demuxFinished_.store(false);
     decodeFinished_.store(false);
+    timeBase_ = timeBase;
 
-    if (!openInput(source.uri, outError, startPositionSec)) {
-        return false;
-    }
-    if (!openVideoDecoder(outError)) {
+    if (!openVideoDecoder(codecParameters, outError)) {
         stop();
         return false;
     }
 
-    running_.store(true);
-    demuxThread_ = std::thread([this]() { demuxLoop(); });
-    decodeThread_ = std::thread([this]() { decodeLoop(); });
     return true;
+}
+
+void FFmpegVideoDecoder::start(PacketQueue<AVPacket*>* packetQueue) {
+    packetQueue_ = packetQueue;
+    decodeFinished_.store(false);
+    running_.store(true);
+    decodeThread_ = std::thread([this]() { decodeLoop(); });
 }
 
 void FFmpegVideoDecoder::stop() {
     running_.store(false);
-    packetQueue_.abort();
-
-    if (demuxThread_.joinable()) {
-        demuxThread_.join();
+    if (packetQueue_ != nullptr) {
+        packetQueue_->abort();
     }
+
     if (decodeThread_.joinable()) {
         decodeThread_.join();
     }
 
-    AVPacket* packet = nullptr;
-    while (packetQueue_.tryPop(packet)) {
-        if (packet != nullptr) {
-            av_packet_free(&packet);
-        }
-    }
-
-    packetQueue_.clear();
     frameQueue_.clear();
 
     if (codecContext_ != nullptr) {
         avcodec_free_context(&codecContext_);
     }
-    if (formatContext_ != nullptr) {
-        avformat_close_input(&formatContext_);
-    }
-    videoStreamIndex_ = -1;
-    demuxFinished_.store(false);
+    packetQueue_ = nullptr;
+    timeBase_ = AVRational{0, 1};
     decodeFinished_.store(false);
 }
 
@@ -84,45 +71,16 @@ bool FFmpegVideoDecoder::tryPopFrame(playerlab::core::VideoFrame& outFrame) {
 }
 
 bool FFmpegVideoDecoder::isDrained() const {
-    return demuxFinished_.load() && decodeFinished_.load() && packetQueue_.empty() && frameQueue_.empty();
+    return decodeFinished_.load() && (packetQueue_ == nullptr || packetQueue_->empty()) && frameQueue_.empty();
 }
 
-bool FFmpegVideoDecoder::openInput(const std::string& uri, std::string& outError, const double startPositionSec) {
-    const int openRet = avformat_open_input(&formatContext_, uri.c_str(), nullptr, nullptr);
-    if (openRet < 0) {
-        outError = "open input failed: " + ffmpegErrorToString(openRet);
+bool FFmpegVideoDecoder::openVideoDecoder(const AVCodecParameters* codecParameters, std::string& outError) {
+    if (codecParameters == nullptr) {
+        outError = "video codec parameters missing";
         return false;
     }
 
-    const int streamRet = avformat_find_stream_info(formatContext_, nullptr);
-    if (streamRet < 0) {
-        outError = "find stream info failed: " + ffmpegErrorToString(streamRet);
-        return false;
-    }
-
-    videoStreamIndex_ = av_find_best_stream(formatContext_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-    if (videoStreamIndex_ < 0) {
-        outError = "video stream not found";
-        return false;
-    }
-
-    if (startPositionSec > 0.0) {
-        AVStream* stream = formatContext_->streams[videoStreamIndex_];
-        const int64_t targetPts = av_rescale_q(static_cast<int64_t>(startPositionSec * AV_TIME_BASE), AV_TIME_BASE_Q,
-                                               stream->time_base);
-        const int seekRet = av_seek_frame(formatContext_, videoStreamIndex_, targetPts, AVSEEK_FLAG_BACKWARD);
-        if (seekRet < 0) {
-            outError = "seek video failed: " + ffmpegErrorToString(seekRet);
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool FFmpegVideoDecoder::openVideoDecoder(std::string& outError) {
-    AVStream* stream = formatContext_->streams[videoStreamIndex_];
-    const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    const AVCodec* codec = avcodec_find_decoder(codecParameters->codec_id);
     if (codec == nullptr) {
         outError = "video decoder not found";
         return false;
@@ -134,7 +92,7 @@ bool FFmpegVideoDecoder::openVideoDecoder(std::string& outError) {
         return false;
     }
 
-    const int parRet = avcodec_parameters_to_context(codecContext_, stream->codecpar);
+    const int parRet = avcodec_parameters_to_context(codecContext_, codecParameters);
     if (parRet < 0) {
         outError = "copy codec parameters failed: " + ffmpegErrorToString(parRet);
         return false;
@@ -154,44 +112,20 @@ bool FFmpegVideoDecoder::openVideoDecoder(std::string& outError) {
     return true;
 }
 
-void FFmpegVideoDecoder::demuxLoop() {
-    while (running_.load()) {
-        AVPacket* packet = av_packet_alloc();
-        if (packet == nullptr) {
-            break;
-        }
-
-        const int readRet = av_read_frame(formatContext_, packet);
-        if (readRet < 0) {
-            av_packet_free(&packet);
-            break;
-        }
-
-        if (packet->stream_index == videoStreamIndex_) {
-            packetQueue_.push(packet);
-        } else {
-            av_packet_free(&packet);
-        }
-    }
-
-    AVPacket* flushPacket = av_packet_alloc();
-    if (flushPacket != nullptr) {
-        flushPacket->data = nullptr;
-        flushPacket->size = 0;
-        flushPacket->stream_index = videoStreamIndex_;
-        packetQueue_.push(flushPacket);
-    }
-    demuxFinished_.store(true);
-}
-
 void FFmpegVideoDecoder::decodeLoop() {
+    if (packetQueue_ == nullptr || codecContext_ == nullptr) {
+        decodeFinished_.store(true);
+        return;
+    }
+
     AVFrame* frame = av_frame_alloc();
     if (frame == nullptr) {
+        decodeFinished_.store(true);
         return;
     }
 
     AVPacket* packet = nullptr;
-    while (packetQueue_.waitPop(packet)) {
+    while (packetQueue_->waitPop(packet)) {
         if (packet == nullptr) {
             continue;
         }
@@ -213,10 +147,9 @@ void FFmpegVideoDecoder::decodeLoop() {
                 break;
             }
 
-            const AVStream* videoStream = formatContext_->streams[videoStreamIndex_];
             const double ptsSec = frame->best_effort_timestamp == AV_NOPTS_VALUE
                                       ? 0.0
-                                      : frame->best_effort_timestamp * av_q2d(videoStream->time_base);
+                                      : frame->best_effort_timestamp * av_q2d(timeBase_);
             frameQueue_.push(toVideoFrame(frame, ptsSec));
         }
 

@@ -4,13 +4,16 @@
 #include <string>
 #include <thread>
 
-#include "core/MediaSource.h"
+extern "C" {
+#include <libavutil/rational.h>
+}
+
 #include "core/VideoFrame.h"
 #include "ffmpeg/FrameQueue.h"
 #include "ffmpeg/PacketQueue.h"
 
+struct AVCodecParameters;
 struct AVCodecContext;
-struct AVFormatContext;
 struct AVFrame;
 struct AVPacket;
 
@@ -24,30 +27,26 @@ public:
     FFmpegVideoDecoder(const FFmpegVideoDecoder&) = delete;
     FFmpegVideoDecoder& operator=(const FFmpegVideoDecoder&) = delete;
 
-    bool open(const playerlab::core::MediaSource& source, std::string& outError, double startPositionSec = 0.0);
+    bool open(const AVCodecParameters* codecParameters, AVRational timeBase, std::string& outError);
+    void start(PacketQueue<AVPacket*>* packetQueue);
     void stop();
 
     [[nodiscard]] bool tryPopFrame(playerlab::core::VideoFrame& outFrame);
     [[nodiscard]] bool isDrained() const;
 
 private:
-    bool openInput(const std::string& uri, std::string& outError, double startPositionSec);
-    bool openVideoDecoder(std::string& outError);
-    void demuxLoop();
+    bool openVideoDecoder(const AVCodecParameters* codecParameters, std::string& outError);
     void decodeLoop();
     static playerlab::core::VideoFrame toVideoFrame(const AVFrame* frame, double ptsSec);
 
     std::atomic<bool> running_{false};
-    AVFormatContext* formatContext_ = nullptr;
     AVCodecContext* codecContext_ = nullptr;
-    int videoStreamIndex_ = -1;
+    AVRational timeBase_{0, 1};
 
-    PacketQueue<AVPacket*> packetQueue_;
+    PacketQueue<AVPacket*>* packetQueue_ = nullptr;
     FrameQueue<playerlab::core::VideoFrame> frameQueue_;
 
-    std::thread demuxThread_;
     std::thread decodeThread_;
-    std::atomic<bool> demuxFinished_{false};
     std::atomic<bool> decodeFinished_{false};
 };
 

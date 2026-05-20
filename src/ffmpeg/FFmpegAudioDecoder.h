@@ -4,14 +4,17 @@
 #include <string>
 #include <thread>
 
+extern "C" {
+#include <libavutil/rational.h>
+}
+
 #include "core/AudioFrame.h"
-#include "core/MediaSource.h"
 #include "ffmpeg/FFmpegResampler.h"
 #include "ffmpeg/FrameQueue.h"
 #include "ffmpeg/PacketQueue.h"
 
+struct AVCodecParameters;
 struct AVCodecContext;
-struct AVFormatContext;
 struct AVPacket;
 
 namespace playerlab::ffmpeg {
@@ -24,30 +27,26 @@ public:
     FFmpegAudioDecoder(const FFmpegAudioDecoder&) = delete;
     FFmpegAudioDecoder& operator=(const FFmpegAudioDecoder&) = delete;
 
-    bool open(const playerlab::core::MediaSource& source, std::string& outError, double startPositionSec = 0.0,
+    bool open(const AVCodecParameters* codecParameters, AVRational timeBase, std::string& outError,
               double playbackRate = 1.0);
+    void start(PacketQueue<AVPacket*>* packetQueue);
     void stop();
     [[nodiscard]] bool tryPopFrame(playerlab::core::AudioFrame& outFrame);
     [[nodiscard]] bool isDrained() const;
 
 private:
-    bool openInput(const std::string& uri, std::string& outError, double startPositionSec);
-    bool openAudioDecoder(std::string& outError, double playbackRate);
-    void demuxLoop();
+    bool openAudioDecoder(const AVCodecParameters* codecParameters, std::string& outError, double playbackRate);
     void decodeLoop();
 
     std::atomic<bool> running_{false};
-    AVFormatContext* formatContext_ = nullptr;
     AVCodecContext* codecContext_ = nullptr;
-    int audioStreamIndex_ = -1;
+    AVRational timeBase_{0, 1};
 
     FFmpegResampler resampler_;
-    PacketQueue<AVPacket*> packetQueue_;
+    PacketQueue<AVPacket*>* packetQueue_ = nullptr;
     FrameQueue<playerlab::core::AudioFrame> frameQueue_;
 
-    std::thread demuxThread_;
     std::thread decodeThread_;
-    std::atomic<bool> demuxFinished_{false};
     std::atomic<bool> decodeFinished_{false};
     int outputSampleRate_ = 48000;
 };
