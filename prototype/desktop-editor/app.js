@@ -1,6 +1,6 @@
 const variants = [
   { key: "A", name: "经典三栏 · 全局可见" },
-  { key: "B", name: "故事优先 · 工具抽屉" },
+  { key: "B", name: "故事优先 · 多轨时间线" },
   { key: "C", name: "引导聚焦 · 分步工作流" },
 ];
 
@@ -138,10 +138,7 @@ function renderVariantB() {
     <nav class="b-rail">${sections.map(([name, icon]) => `<button class="${state.activeSection === name ? "is-active" : ""}" data-action="section" data-section="${name}"><b>${icon}</b><span>${name}</span></button>`).join("")}</nav>
     <aside class="b-drawer">${drawerForSection()}</aside>
     <div class="b-workspace"><div style="position:relative">${preview()}<aside class="b-context-popover"><p class="eyebrow">当前片段</p><h3>${state.selectedClip}</h3><div class="b-context-actions">${editButtons()}</div></aside></div>
-      <section class="b-story"><div class="b-story__header"><h2>主故事线 <span class="muted">· 自动贴合 · 01:24</span></h2><span class="muted">拖动卡片即可排序</span></div>
-        <div class="story-strip"><button class="story-card" data-action="select-clip" data-clip="开场 · 片段 01"><strong>01 · 开场</strong><small>00:12</small></button><button class="story-card is-selected" data-action="select-clip" data-clip="街角 · 片段 02"><strong>02 · 街角</strong><small>00:26 · 已选</small></button><button class="story-card" data-action="select-clip" data-clip="河岸 · 片段 03"><strong>03 · 河岸</strong><small>00:18</small></button></div>
-        <div class="c-track-summary"><div class="track-pill music">♫ 主题音乐 · 00:08—01:12 · −12 dB</div><div class="track-pill caption">字 9 个字幕段 · 1 个待校对</div></div>
-      </section>
+      <section class="b-multitrack"><div class="b-multitrack__header"><div><h2>多轨道时间线</h2><span>主故事线磁性贴合 · 背景音乐与字幕同时可见</span></div><div class="b-multitrack__zoom"><span>缩放</span><button class="quiet-button" data-action="generic" data-message="缩小时间线">−</button><button class="quiet-button" data-action="generic" data-message="放大时间线">＋</button></div></div>${timeline()}</section>
     </div>
     <footer class="b-statusbar"><span><span class="status-dot"></span>素材引用均在线 · 恢复快照刚刚更新</span><span>磁性吸附 开 · 按住 ⌥ 临时关闭</span></footer>
   </div>`;
@@ -310,4 +307,3 @@ window.addEventListener("popstate", () => {
 });
 
 render();
-
