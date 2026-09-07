@@ -282,6 +282,39 @@ Player Core Threading Refactor
 
 ---
 
+## Iteration 07C
+
+ffplay-style Seek Refactor
+
+**目标：**
+
+将当前基于 pipeline teardown/restart 的 seek 重构为更接近 ffplay 的运行时 seek 流程，保证 seek 后音视频状态切换、旧数据淘汰与时钟重建行为正确。
+
+**重点：**
+
+- seek 请求由 read thread 在运行中执行，而不是重新 open 整条 pipeline
+- 引入 packet / frame serial，建立 seek epoch
+- queue flush 与 decoder flush 改为 seek 内部协议，而不是 decoder 退出信号
+- seek 后旧 packet、旧 frame、旧音频缓冲都会被正确丢弃
+- 播放中 seek 与暂停态 seek 都保持合理行为
+- 为后续网络播放、字幕同步打下正确的 seek 基础
+
+**不做：**
+
+- 完整复制 ffplay 全部内部结构
+- 音频 sample 级拉伸/压缩
+- 独立 OpenGL render thread
+- subtitle seek 刷新全链路
+- 硬件解码 seek 兼容层
+
+**备注：**
+
+这是插入到 `Iteration 07B` 之后、`Iteration 08: Network Playback` 之前的专项重构迭代。
+
+使用 `07C` 而不是整体重编号，目的是保持已完成 iteration 与未来 roadmap 引用稳定。
+
+---
+
 ## Iteration 08
 
 Network Playback

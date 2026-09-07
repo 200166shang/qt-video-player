@@ -25,4 +25,3 @@ cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" "${C
 cmake --build "${BUILD_DIR}" --config "${BUILD_TYPE}" -j
 
 echo "Build done. Executable should be in: ${ROOT_DIR}/bin"
-EOF && chmod +x scripts/build.sh

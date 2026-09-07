@@ -310,6 +310,7 @@
 - `src/ffmpeg/FFmpegVideoDecoder.*` 移除内部 input ownership / demux thread，改为只消费外部 video packet queue 并输出 frame queue
 - `src/ffmpeg/FFmpegAudioDecoder.*` 移除内部 input ownership / demux thread，改为只消费外部 audio packet queue 并输出 frame queue
 - `src/ffmpeg/PacketQueue.h` 增加有界等待推送能力，供 read worker 在 queue 积压时限流
+- `src/ffmpeg/FFmpegReadWorker.*`、`src/ffmpeg/FFmpegVideoDecoder.*`、`src/ffmpeg/FFmpegAudioDecoder.*` 补充线程生命周期、packet dispatch、decode drained 调试日志
 - `src/ui/ControlBar.*`、`src/ui/MainWindow.cpp` 切换到新的共享 `PlaybackState`
 - `src/tools/DecodeProbe.cpp` 改为走新的 read worker + decoder 管线
 - `CMakeLists.txt` 纳入 `PlayerCore`、`PlaybackState`、`FFmpegReadWorker` 等新增文件
@@ -318,6 +319,7 @@
 
 - 消除 UI 线程直接持有并驱动 demux/decode/pump 的结构问题
 - 消除 audio/video decoder 各自打开输入源、各自 `av_read_frame` 的重复 demux 结构
+- 修复 read worker 在 queue abort 时 flush packet 未释放的 teardown 边界问题
 
 ### Notes
 
@@ -326,6 +328,44 @@
 - 已做启动烟测：`./bin/playerlab` 可启动并输出初始化日志
 - 受当前无自动化桌面交互回路限制，本轮未在本地自动脚本中完整覆盖 open/play/pause/resume/seek/stop 的 GUI 交互验收；该部分仍建议手动回归
 - 本迭代仍保持 seek 通过 pipeline teardown/restart 的临时策略，未扩展到 flush-only / serial 机制
+
+---
+
+## Iteration 07C: ffplay-style Seek Refactor
+
+### Date
+
+2026-05-21
+
+### Summary
+
+将 seek 从 `pipeline teardown/restart` 重构为运行时 seek 路径：由 read thread 执行 `avformat_seek_file(...)`，用 `Flush/Eof + serial` 驱动 decoder 常驻和旧 epoch 数据淘汰。
+
+### Added
+
+- `src/ffmpeg/QueuedPacket.h`，显式区分 `Data / Flush / Eof` 的队列控制项
+- `FFmpegReadWorker::SeekRequest` 运行时 seek 请求模型
+- `VideoFrame.serial`、`AudioFrame.serial`，用于跨 seek epoch 过滤旧 frame
+
+### Changed
+
+- `src/ffmpeg/FFmpegReadWorker.*` 改为支持运行时 seek、seek request coalescing、`avformat_seek_file(...)`、EOF 等待新 seek 请求
+- `src/ffmpeg/FFmpegVideoDecoder.*`、`src/ffmpeg/FFmpegAudioDecoder.*` 改为消费 `QueuedPacket`，flush 时执行 `avcodec_flush_buffers(...)` 并继续存活
+- `src/core/PlayerCore.*` 改为运行时 seek：不再用 `startPipeline()` 重启链路，而是通过 serial 重置 clock、pending frame、audio buffer，并只消费当前 serial 的 frame
+- `src/tools/DecodeProbe.cpp` 增加最小 seek 烟测，验证 seek 后 serial 切换
+
+### Fixed
+
+- 消除 seek 直接触发整条 pipeline teardown/restart 的结构问题
+- 消除 decoder 将 flush 视为“线程结束”的临时语义
+- 消除 seek 后旧 packet / old frame 缺少 epoch 过滤导致的穿透风险
+
+### Notes
+
+- 验证通过：`cmake --build build -j4`
+- 验证通过：`./bin/playerlab_decode_probe "testdata/雨爱 - 杨丞琳.mp4"`，可观察到 seek 请求后 frame serial 从 `1` 切换到 `2`
+- 当前自动化验证已覆盖运行时 seek 协议与 serial 切换，但尚未完整覆盖 GUI 层 `paused seek / EOF seek / 连续快速 seek` 的手工回归
+- 本迭代仍未引入 subtitle seek、sample 级音频补偿、独立 render thread，保持在 07C scope 内
 
 ---
 

@@ -70,6 +70,16 @@ public:
         cv_.notify_all();
     }
 
+    template <typename CleanupFn>
+    void clearWith(CleanupFn cleanup) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        while (!queue_.empty()) {
+            cleanup(queue_.front());
+            queue_.pop();
+        }
+        cv_.notify_all();
+    }
+
     void reset() {
         std::lock_guard<std::mutex> lock(mutex_);
         abort_ = false;

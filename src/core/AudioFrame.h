@@ -17,6 +17,7 @@ struct AudioFrame {
     AudioSampleFormat sampleFormat = AudioSampleFormat::S16;
     int sampleCount = 0;
     double ptsSec = 0.0;
+    int serial = 0;
 
     [[nodiscard]] bool isValid() const {
         return sampleRate > 0 && channels > 0 && sampleCount > 0 && !data.empty();

@@ -5,17 +5,22 @@
 #include <QOpenGLShaderProgram>
 #include <QSurfaceFormat>
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
 
-#include "core/MediaSource.h"
 #include "core/MediaInfo.h"
+#include "core/MediaSource.h"
 #include "core/VideoFrame.h"
 #include "ffmpeg/FFmpegGlobal.h"
 #include "ffmpeg/FFmpegReadWorker.h"
 #include "ffmpeg/FFmpegVideoDecoder.h"
+#include "ffmpeg/QueuedPacket.h"
 
 namespace {
 
@@ -89,29 +94,43 @@ void probeDecode(const std::string& uri) {
         std::cout << "[decode] read worker open failed: " << error << "\n";
         return;
     }
-    playerlab::ffmpeg::PacketQueue<AVPacket*> videoPacketQueue;
+
+    playerlab::ffmpeg::PacketQueue<playerlab::ffmpeg::QueuedPacket> videoPacketQueue;
     if (!decoder.open(readWorker.videoCodecParameters(), readWorker.videoTimeBase(), error)) {
         std::cout << "[decode] open failed: " << error << "\n";
         return;
     }
+
     readWorker.start(&videoPacketQueue, nullptr);
     decoder.start(&videoPacketQueue);
 
     std::cout << "[decode] open ok\n";
     int frames = 0;
+    bool seekRequested = false;
     const auto start = std::chrono::steady_clock::now();
-    while (frames < 10) {
+    while (frames < 12) {
         playerlab::core::VideoFrame frame;
         if (decoder.tryPopFrame(frame)) {
             ++frames;
             std::cout << "[decode] frame#" << frames << " " << frame.width << "x" << frame.height
                       << " yStride=" << frame.linesize[0] << " uStride=" << frame.linesize[1]
-                      << " vStride=" << frame.linesize[2] << " pts=" << frame.ptsSec << "\n";
+                      << " vStride=" << frame.linesize[2] << " pts=" << frame.ptsSec
+                      << " serial=" << frame.serial << "\n";
+
+            if (!seekRequested && frames == 5) {
+                seekRequested = true;
+                readWorker.requestSeek(playerlab::ffmpeg::SeekRequest{
+                    .targetSec = 1.5,
+                    .relSec = 0.0,
+                    .flags = AVSEEK_FLAG_BACKWARD,
+                });
+                std::cout << "[decode] seek requested target=1.5\n";
+            }
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        if (std::chrono::steady_clock::now() - start > std::chrono::seconds(3)) {
+        if (std::chrono::steady_clock::now() - start > std::chrono::seconds(5)) {
             break;
         }
     }

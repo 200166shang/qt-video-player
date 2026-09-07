@@ -7,6 +7,8 @@ extern "C" {
 
 #include <cmath>
 
+#include "utils/Logger.h"
+
 namespace {
 
 std::string ffmpegErrorToString(const int errNum) {
@@ -28,7 +30,7 @@ bool FFmpegAudioDecoder::open(const AVCodecParameters* codecParameters, const AV
     stop();
     frameQueue_.reset();
     resampler_.close();
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
     timeBase_ = timeBase;
 
     if (!openAudioDecoder(codecParameters, outError, playbackRate)) {
@@ -39,10 +41,13 @@ bool FFmpegAudioDecoder::open(const AVCodecParameters* codecParameters, const AV
     return true;
 }
 
-void FFmpegAudioDecoder::start(PacketQueue<AVPacket*>* packetQueue) {
+void FFmpegAudioDecoder::start(PacketQueue<QueuedPacket>* packetQueue) {
     packetQueue_ = packetQueue;
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
     running_.store(true);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Audio decoder start: outputSampleRate={}", outputSampleRate_);
+    }
     decodeThread_ = std::thread([this]() { decodeLoop(); });
 }
 
@@ -51,6 +56,7 @@ void FFmpegAudioDecoder::stop() {
     if (packetQueue_ != nullptr) {
         packetQueue_->abort();
     }
+    frameQueue_.abort();
 
     if (decodeThread_.joinable()) {
         decodeThread_.join();
@@ -64,15 +70,18 @@ void FFmpegAudioDecoder::stop() {
     }
     packetQueue_ = nullptr;
     timeBase_ = AVRational{0, 1};
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Audio decoder stop");
+    }
 }
 
 bool FFmpegAudioDecoder::tryPopFrame(playerlab::core::AudioFrame& outFrame) {
     return frameQueue_.tryPop(outFrame);
 }
 
-bool FFmpegAudioDecoder::isDrained() const {
-    return decodeFinished_.load() && (packetQueue_ == nullptr || packetQueue_->empty()) && frameQueue_.empty();
+bool FFmpegAudioDecoder::isDrained(const int serial) const {
+    return eofSerial_.load() == serial && frameQueue_.empty();
 }
 
 bool FFmpegAudioDecoder::openAudioDecoder(const AVCodecParameters* codecParameters, std::string& outError,
@@ -100,6 +109,8 @@ bool FFmpegAudioDecoder::openAudioDecoder(const AVCodecParameters* codecParamete
         return false;
     }
 
+    codecContext_->pkt_timebase = timeBase_;
+
     const int openRet = avcodec_open2(codecContext_, codec, nullptr);
     if (openRet < 0) {
         outError = "open audio decoder failed: " + ffmpegErrorToString(openRet);
@@ -122,24 +133,74 @@ bool FFmpegAudioDecoder::openAudioDecoder(const AVCodecParameters* codecParamete
 
 void FFmpegAudioDecoder::decodeLoop() {
     if (packetQueue_ == nullptr || codecContext_ == nullptr) {
-        decodeFinished_.store(true);
         return;
     }
+
+    std::uint64_t decodedFrames = 0;
+    std::uint64_t flushCount = 0;
+    std::uint64_t eofCount = 0;
 
     AVFrame* frame = av_frame_alloc();
     if (frame == nullptr) {
-        decodeFinished_.store(true);
         return;
     }
 
-    AVPacket* packet = nullptr;
-    while (packetQueue_->waitPop(packet)) {
+    QueuedPacket queuedPacket;
+    int decoderSerial = 0;
+    while (packetQueue_->waitPop(queuedPacket)) {
+        if (queuedPacket.kind == QueuedPacketKind::Flush) {
+            avcodec_flush_buffers(codecContext_);
+            decoderSerial = queuedPacket.serial;
+            eofSerial_.store(-1);
+            ++flushCount;
+            continue;
+        }
+
+        if (queuedPacket.kind == QueuedPacketKind::Eof) {
+            decoderSerial = queuedPacket.serial;
+            const int sendRet = avcodec_send_packet(codecContext_, nullptr);
+            if (sendRet < 0 && sendRet != AVERROR(EAGAIN) && sendRet != AVERROR_EOF) {
+                eofSerial_.store(decoderSerial);
+                ++eofCount;
+                continue;
+            }
+
+            while (running_.load()) {
+                const int recvRet = avcodec_receive_frame(codecContext_, frame);
+                if (recvRet == AVERROR(EAGAIN) || recvRet == AVERROR_EOF) {
+                    break;
+                }
+                if (recvRet < 0) {
+                    break;
+                }
+
+                playerlab::core::AudioFrame outFrame;
+                if (!resampler_.resample(frame, outFrame)) {
+                    continue;
+                }
+
+                outFrame.ptsSec = frame->best_effort_timestamp == AV_NOPTS_VALUE
+                                      ? 0.0
+                                      : frame->best_effort_timestamp * av_q2d(timeBase_);
+                outFrame.serial = decoderSerial;
+                if (!frameQueue_.push(std::move(outFrame))) {
+                    break;
+                }
+                ++decodedFrames;
+            }
+
+            eofSerial_.store(decoderSerial);
+            ++eofCount;
+            continue;
+        }
+
+        AVPacket* packet = queuedPacket.packet;
         if (packet == nullptr) {
             continue;
         }
 
-        const bool flush = packet->data == nullptr && packet->size == 0;
-        const int sendRet = avcodec_send_packet(codecContext_, flush ? nullptr : packet);
+        decoderSerial = queuedPacket.serial;
+        const int sendRet = avcodec_send_packet(codecContext_, packet);
         av_packet_free(&packet);
 
         if (sendRet < 0 && sendRet != AVERROR(EAGAIN)) {
@@ -163,16 +224,19 @@ void FFmpegAudioDecoder::decodeLoop() {
             outFrame.ptsSec = frame->best_effort_timestamp == AV_NOPTS_VALUE
                                   ? 0.0
                                   : frame->best_effort_timestamp * av_q2d(timeBase_);
-            frameQueue_.push(std::move(outFrame));
-        }
-
-        if (flush) {
-            break;
+            outFrame.serial = decoderSerial;
+            if (!frameQueue_.push(std::move(outFrame))) {
+                break;
+            }
+            ++decodedFrames;
         }
     }
 
-    decodeFinished_.store(true);
     av_frame_free(&frame);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Audio decoder exit: frames={} flushes={} eofs={} packetQ={} frameQ={}", decodedFrames, flushCount,
+                  eofCount, packetQueue_ != nullptr ? packetQueue_->size() : 0, frameQueue_.size());
+    }
 }
 
 }  // namespace playerlab::ffmpeg

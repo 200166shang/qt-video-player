@@ -208,3 +208,89 @@ PlayerLab 当前已经具备基础播放、播放控制与 AV sync 能力，但�
 - `docs/spec/02-roadmap.md`
 - `docs/spec/iterations/iter-07b-player-core-threading-refactor.md`
 - 完成实现后更新 `docs/spec/04-changelog.md`
+
+---
+
+## ADR-0003: 插入 ffplay 风格 Seek 重构迭代
+
+### Status
+
+Accepted
+
+### Context
+
+`Iteration 07B` 完成后，PlayerLab 的播放线程边界已经比早期清晰很多，但 seek 仍然沿用临时策略：
+
+- `PlayerCore::seek()` 通过 `startPipeline()` 触发 `teardownPipeline() + reopen`
+- `FFmpegReadWorker` 只在 open 阶段通过 `startPositionSec` 执行一次 seek
+- decoder 把当前 flush packet 当作结束信号，seek 后依赖线程重建
+- packet、frame、audio buffer 没有 serial/epoch 机制来系统性淘汰旧数据
+
+这导致 seek 的结构语义与 ffplay 相差很远，也会直接阻碍后续网络播放、字幕、EOF seek、连续 seek 等场景。
+
+### Decision
+
+在 `Iteration 08: Network Playback` 前插入 `Iteration 07C: ffplay-style Seek Refactor`。
+
+该重构采用“对齐语义骨架，而非一次性照搬全部实现”的策略：
+
+1. seek 请求只负责描述目标位置，不再直接触发 pipeline restart
+2. seek 由 read thread 在运行中执行，采用 `avformat_seek_file(...)`
+3. queue 控制语义拆分为 data / flush / eof
+4. 引入 packet serial、decoder serial、frame serial，建立 seek epoch
+5. decoder 在 seek flush 后执行 `avcodec_flush_buffers(...)` 并继续存活
+6. `PlayerCore` 在 seek 后定向重置 pending frame、audio buffer 与 clock
+7. 暂不完整复制 ffplay 全部 `VideoState`、subtitle seek、sample 级音频补偿
+
+### Consequences
+
+- roadmap 需要插入一个新的补充重构 iteration
+- `FFmpegReadWorker`、`PacketQueue`、decoder、`PlayerCore` 的接口都会发生结构性调整
+- 当前“flush packet 等于 decoder 结束”的临时约定会被废弃
+- `VideoFrame` / `AudioFrame` 需要具备 serial 概念
+- 后续网络播放、字幕同步可复用更正确的 seek 语义基础
+
+### Alternatives Considered
+
+#### 方案 A：继续保留 teardown/restart seek
+
+优点：
+
+- 当前改动最小
+
+缺点：
+
+- seek/open 生命周期继续耦合
+- 连续 seek、paused seek、EOF seek 语义都不稳
+- 后续网络播放与字幕只会继续叠加复杂度
+
+#### 方案 B：一次性完整复制 ffplay seek 与全部相关内部结构
+
+优点：
+
+- 理论上最接近参考实现
+
+缺点：
+
+- 改动面过大
+- 会把 subtitle、外部时钟、完整 frame queue 语义等问题一次性卷进来
+- 不符合当前项目小步验证节奏
+
+#### 方案 C：只把 `av_seek_frame(...)` 改成 `avformat_seek_file(...)`
+
+优点：
+
+- 表面上更接近 ffplay
+
+缺点：
+
+- 如果没有 flush/eof 拆分与 serial 机制，seek 语义仍然是错的
+- 无法解决旧帧、旧音频、旧 epoch 穿透问题
+
+### Follow-up
+
+需要更新：
+
+- `docs/spec/02-roadmap.md`
+- `docs/spec/iterations/iter-07c-seek-refactor-ffplay.md`
+- 完成实现后更新 `docs/spec/04-changelog.md`

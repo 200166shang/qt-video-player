@@ -20,8 +20,7 @@
 #include "ffmpeg/FFmpegReadWorker.h"
 #include "ffmpeg/FFmpegVideoDecoder.h"
 #include "ffmpeg/PacketQueue.h"
-
-struct AVPacket;
+#include "ffmpeg/QueuedPacket.h"
 
 namespace playerlab::core {
 
@@ -69,6 +68,10 @@ private:
     [[nodiscard]] static int delayToWaitMs(double delaySec);
     void scheduleFrameWake(int waitMs);
     void resetFrameTimeline();
+    void resetSeekState(double targetSec, int nextSerial, bool keepPaused);
+    void syncActiveSerial();
+    [[nodiscard]] bool tryPopCurrentVideoFrame(playerlab::core::VideoFrame& outFrame);
+    [[nodiscard]] bool tryPopCurrentAudioFrame(playerlab::core::AudioFrame& outFrame);
     void clearPacketQueues();
 
     std::unique_ptr<playerlab::audio::IAudioOutput> audioOutput_;
@@ -80,8 +83,8 @@ private:
     playerlab::ffmpeg::FFmpegReadWorker readWorker_;
     playerlab::ffmpeg::FFmpegVideoDecoder videoDecoder_;
     playerlab::ffmpeg::FFmpegAudioDecoder audioDecoder_;
-    playerlab::ffmpeg::PacketQueue<AVPacket*> videoPacketQueue_{96};
-    playerlab::ffmpeg::PacketQueue<AVPacket*> audioPacketQueue_{192};
+    playerlab::ffmpeg::PacketQueue<playerlab::ffmpeg::QueuedPacket> videoPacketQueue_{96};
+    playerlab::ffmpeg::PacketQueue<playerlab::ffmpeg::QueuedPacket> audioPacketQueue_{192};
     double frameTimerSec_ = 0.0;
     double lastFrameDurationSec_ = 1.0 / 30.0;
     bool frameWakePending_ = false;
@@ -98,6 +101,8 @@ private:
     float volume_ = 1.0F;
     bool muted_ = false;
     std::optional<double> firstAudioPtsSec_;
+    int activeSerial_ = 1;
+    bool pausedSeekPreviewPending_ = false;
     std::chrono::steady_clock::time_point lastSyncLogAt_{};
     std::uint64_t debugVideoDisplayCount_ = 0;
     std::uint64_t debugVideoDropCount_ = 0;

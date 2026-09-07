@@ -52,6 +52,7 @@ add_library(playerlab_ffmpeg STATIC
     src/ffmpeg/FFmpegProbe.cpp
     src/ffmpeg/PacketQueue.h
     src/ffmpeg/FrameQueue.h
+    src/ffmpeg/QueuedPacket.h
     src/ffmpeg/FFmpegReadWorker.h
     src/ffmpeg/FFmpegReadWorker.cpp
     src/ffmpeg/FFmpegVideoDecoder.h
@@ -68,6 +69,7 @@ target_link_libraries(playerlab_ffmpeg PUBLIC
     ffmpeg::swscale
     ffmpeg::swresample
     fmt::fmt
+    playerlab_utils
 )
 target_include_directories(playerlab_ffmpeg PUBLIC ${CMAKE_SOURCE_DIR}/src)
 

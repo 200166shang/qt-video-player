@@ -6,7 +6,8 @@ extern "C" {
 }
 
 #include <algorithm>
-#include <array>
+
+#include "utils/Logger.h"
 
 namespace {
 
@@ -28,7 +29,7 @@ bool FFmpegVideoDecoder::open(const AVCodecParameters* codecParameters, const AV
                               std::string& outError) {
     stop();
     frameQueue_.reset();
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
     timeBase_ = timeBase;
 
     if (!openVideoDecoder(codecParameters, outError)) {
@@ -39,10 +40,13 @@ bool FFmpegVideoDecoder::open(const AVCodecParameters* codecParameters, const AV
     return true;
 }
 
-void FFmpegVideoDecoder::start(PacketQueue<AVPacket*>* packetQueue) {
+void FFmpegVideoDecoder::start(PacketQueue<QueuedPacket>* packetQueue) {
     packetQueue_ = packetQueue;
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
     running_.store(true);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Video decoder start");
+    }
     decodeThread_ = std::thread([this]() { decodeLoop(); });
 }
 
@@ -51,6 +55,7 @@ void FFmpegVideoDecoder::stop() {
     if (packetQueue_ != nullptr) {
         packetQueue_->abort();
     }
+    frameQueue_.abort();
 
     if (decodeThread_.joinable()) {
         decodeThread_.join();
@@ -63,15 +68,18 @@ void FFmpegVideoDecoder::stop() {
     }
     packetQueue_ = nullptr;
     timeBase_ = AVRational{0, 1};
-    decodeFinished_.store(false);
+    eofSerial_.store(-1);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Video decoder stop");
+    }
 }
 
 bool FFmpegVideoDecoder::tryPopFrame(playerlab::core::VideoFrame& outFrame) {
     return frameQueue_.tryPop(outFrame);
 }
 
-bool FFmpegVideoDecoder::isDrained() const {
-    return decodeFinished_.load() && (packetQueue_ == nullptr || packetQueue_->empty()) && frameQueue_.empty();
+bool FFmpegVideoDecoder::isDrained(const int serial) const {
+    return eofSerial_.load() == serial && frameQueue_.empty();
 }
 
 bool FFmpegVideoDecoder::openVideoDecoder(const AVCodecParameters* codecParameters, std::string& outError) {
@@ -98,13 +106,21 @@ bool FFmpegVideoDecoder::openVideoDecoder(const AVCodecParameters* codecParamete
         return false;
     }
 
+    // Keep decoded frame timestamps in the stream time base. Without this,
+    // codecs such as H.264 may expose best_effort_timestamp in an undefined
+    // unit, which breaks playback timing and seek validation.
+    codecContext_->pkt_timebase = timeBase_;
+
     const int openRet = avcodec_open2(codecContext_, codec, nullptr);
     if (openRet < 0) {
         outError = "open video decoder failed: " + ffmpegErrorToString(openRet);
         return false;
     }
 
-    if (codecContext_->pix_fmt != AV_PIX_FMT_YUV420P) {
+    // For codecs such as H.264, codecContext_->pix_fmt is not negotiated until
+    // the first frame is decoded. Validate the demuxer's advertised format
+    // here instead of rejecting every otherwise supported YUV420P stream.
+    if (codecParameters->format != AV_PIX_FMT_YUV420P) {
         outError = "only YUV420P is supported in iter-04";
         return false;
     }
@@ -114,24 +130,68 @@ bool FFmpegVideoDecoder::openVideoDecoder(const AVCodecParameters* codecParamete
 
 void FFmpegVideoDecoder::decodeLoop() {
     if (packetQueue_ == nullptr || codecContext_ == nullptr) {
-        decodeFinished_.store(true);
         return;
     }
+
+    std::uint64_t decodedFrames = 0;
+    std::uint64_t flushCount = 0;
+    std::uint64_t eofCount = 0;
 
     AVFrame* frame = av_frame_alloc();
     if (frame == nullptr) {
-        decodeFinished_.store(true);
         return;
     }
 
-    AVPacket* packet = nullptr;
-    while (packetQueue_->waitPop(packet)) {
+    QueuedPacket queuedPacket;
+    int decoderSerial = 0;
+    while (packetQueue_->waitPop(queuedPacket)) {
+        if (queuedPacket.kind == QueuedPacketKind::Flush) {
+            avcodec_flush_buffers(codecContext_);
+            decoderSerial = queuedPacket.serial;
+            eofSerial_.store(-1);
+            ++flushCount;
+            continue;
+        }
+
+        if (queuedPacket.kind == QueuedPacketKind::Eof) {
+            decoderSerial = queuedPacket.serial;
+            const int sendRet = avcodec_send_packet(codecContext_, nullptr);
+            if (sendRet < 0 && sendRet != AVERROR(EAGAIN) && sendRet != AVERROR_EOF) {
+                eofSerial_.store(decoderSerial);
+                ++eofCount;
+                continue;
+            }
+
+            while (running_.load()) {
+                const int recvRet = avcodec_receive_frame(codecContext_, frame);
+                if (recvRet == AVERROR(EAGAIN) || recvRet == AVERROR_EOF) {
+                    break;
+                }
+                if (recvRet < 0) {
+                    break;
+                }
+
+                const double ptsSec = frame->best_effort_timestamp == AV_NOPTS_VALUE
+                                          ? 0.0
+                                          : frame->best_effort_timestamp * av_q2d(timeBase_);
+                if (!frameQueue_.push(toVideoFrame(frame, ptsSec, decoderSerial))) {
+                    break;
+                }
+                ++decodedFrames;
+            }
+
+            eofSerial_.store(decoderSerial);
+            ++eofCount;
+            continue;
+        }
+
+        AVPacket* packet = queuedPacket.packet;
         if (packet == nullptr) {
             continue;
         }
 
-        const bool flush = packet->data == nullptr && packet->size == 0;
-        const int sendRet = avcodec_send_packet(codecContext_, flush ? nullptr : packet);
+        decoderSerial = queuedPacket.serial;
+        const int sendRet = avcodec_send_packet(codecContext_, packet);
         av_packet_free(&packet);
 
         if (sendRet < 0 && sendRet != AVERROR(EAGAIN)) {
@@ -150,23 +210,27 @@ void FFmpegVideoDecoder::decodeLoop() {
             const double ptsSec = frame->best_effort_timestamp == AV_NOPTS_VALUE
                                       ? 0.0
                                       : frame->best_effort_timestamp * av_q2d(timeBase_);
-            frameQueue_.push(toVideoFrame(frame, ptsSec));
-        }
-
-        if (flush) {
-            break;
+            if (!frameQueue_.push(toVideoFrame(frame, ptsSec, decoderSerial))) {
+                break;
+            }
+            ++decodedFrames;
         }
     }
 
-    decodeFinished_.store(true);
     av_frame_free(&frame);
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("Video decoder exit: frames={} flushes={} eofs={} packetQ={} frameQ={}", decodedFrames, flushCount,
+                  eofCount, packetQueue_ != nullptr ? packetQueue_->size() : 0, frameQueue_.size());
+    }
 }
 
-playerlab::core::VideoFrame FFmpegVideoDecoder::toVideoFrame(const AVFrame* frame, const double ptsSec) {
+playerlab::core::VideoFrame FFmpegVideoDecoder::toVideoFrame(const AVFrame* frame, const double ptsSec,
+                                                             const int serial) {
     playerlab::core::VideoFrame out;
     out.width = frame->width;
     out.height = frame->height;
     out.ptsSec = ptsSec;
+    out.serial = serial;
 
     const int yStride = frame->linesize[0];
     const int uStride = frame->linesize[1];

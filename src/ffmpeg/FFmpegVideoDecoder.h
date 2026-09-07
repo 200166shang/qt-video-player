@@ -9,13 +9,13 @@ extern "C" {
 }
 
 #include "core/VideoFrame.h"
-#include "ffmpeg/FrameQueue.h"
+#include "ffmpeg/CircularFrameQueue.h"
 #include "ffmpeg/PacketQueue.h"
+#include "ffmpeg/QueuedPacket.h"
 
 struct AVCodecParameters;
 struct AVCodecContext;
 struct AVFrame;
-struct AVPacket;
 
 namespace playerlab::ffmpeg {
 
@@ -28,26 +28,26 @@ public:
     FFmpegVideoDecoder& operator=(const FFmpegVideoDecoder&) = delete;
 
     bool open(const AVCodecParameters* codecParameters, AVRational timeBase, std::string& outError);
-    void start(PacketQueue<AVPacket*>* packetQueue);
+    void start(PacketQueue<QueuedPacket>* packetQueue);
     void stop();
 
     [[nodiscard]] bool tryPopFrame(playerlab::core::VideoFrame& outFrame);
-    [[nodiscard]] bool isDrained() const;
+    [[nodiscard]] bool isDrained(int serial) const;
 
 private:
     bool openVideoDecoder(const AVCodecParameters* codecParameters, std::string& outError);
     void decodeLoop();
-    static playerlab::core::VideoFrame toVideoFrame(const AVFrame* frame, double ptsSec);
+    static playerlab::core::VideoFrame toVideoFrame(const AVFrame* frame, double ptsSec, int serial);
 
     std::atomic<bool> running_{false};
     AVCodecContext* codecContext_ = nullptr;
     AVRational timeBase_{0, 1};
 
-    PacketQueue<AVPacket*>* packetQueue_ = nullptr;
-    FrameQueue<playerlab::core::VideoFrame> frameQueue_;
+    PacketQueue<QueuedPacket>* packetQueue_ = nullptr;
+    CircularFrameQueue<playerlab::core::VideoFrame, 24> frameQueue_;
 
     std::thread decodeThread_;
-    std::atomic<bool> decodeFinished_{false};
+    std::atomic<int> eofSerial_{-1};
 };
 
 }  // namespace playerlab::ffmpeg

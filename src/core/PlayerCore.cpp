@@ -2,6 +2,7 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 }
 
 #include <algorithm>
@@ -64,6 +65,7 @@ void PlayerCore::play() {
     if (playbackState_ == PlaybackState::Paused) {
         playbackClock_.onPauseChanged(false);
         frameWakePending_ = false;
+        pausedSeekPreviewPending_ = false;
         if (audioOutput_ != nullptr) {
             audioOutput_->resume();
         }
@@ -102,32 +104,25 @@ void PlayerCore::stop() {
     resetFrameTimeline();
     pendingVideoFrame_.reset();
     firstAudioPtsSec_.reset();
+    pausedSeekPreviewPending_ = false;
     updateState(PlaybackState::Stopped);
     emit positionChanged(0.0, durationSec_);
 }
 
 void PlayerCore::seek(const double targetSec) {
-    if (!hasSource_) {
+    if (!hasSource_ || playbackState_ == PlaybackState::Stopped) {
         return;
     }
 
-    const bool shouldResume = playbackState_ != PlaybackState::Paused;
     const double clampedTarget = clampSeekTarget(targetSec);
-    if (!startPipeline(clampedTarget, false, false)) {
-        return;
-    }
-
-    if (shouldResume) {
-        frameWakePending_ = false;
-        updateState(PlaybackState::Playing);
-        return;
-    }
-
-    playbackClock_.onPauseChanged(true);
-    if (audioOutput_ != nullptr) {
-        audioOutput_->pause();
-    }
-    updateState(PlaybackState::Paused);
+    const bool keepPaused = playbackState_ == PlaybackState::Paused;
+    const int nextSerial = readWorker_.requestSeek(playerlab::ffmpeg::SeekRequest{
+        .targetSec = clampedTarget,
+        .relSec = 0.0,
+        .flags = AVSEEK_FLAG_BACKWARD,
+    });
+    resetSeekState(clampedTarget, nextSerial, keepPaused);
+    emit positionChanged(clampedTarget, durationSec_);
 }
 
 void PlayerCore::setVolume(const float volume) {
@@ -251,6 +246,9 @@ bool PlayerCore::startPipeline(const double startPositionSec, const bool refresh
         audioDecoder_.start(&audioPacketQueue_);
     }
 
+    activeSerial_ = readWorker_.currentSerial();
+    pausedSeekPreviewPending_ = false;
+
     playbackClock_.reset(hasAudio_);
     playbackClock_.setPlaybackRate(playbackRate_);
     if (startPositionSec > 0.0) {
@@ -309,7 +307,9 @@ void PlayerCore::teardownPipeline() {
     pendingVideoFrame_.reset();
     frameWakePending_ = false;
     firstAudioPtsSec_.reset();
+    pausedSeekPreviewPending_ = false;
     hasAudio_ = false;
+    activeSerial_ = 1;
 
     if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
         LOG_DEBUG("Playback pipeline teardown");
@@ -350,6 +350,23 @@ void PlayerCore::maybeTransitionToEnded() {
 }
 
 void PlayerCore::onFramePump() {
+    syncActiveSerial();
+
+    if (playbackState_ == PlaybackState::Paused) {
+        if (pausedSeekPreviewPending_) {
+            playerlab::core::VideoFrame previewFrame;
+            if (tryPopCurrentVideoFrame(previewFrame)) {
+                emit videoFrameReady(previewFrame);
+                pausedSeekPreviewPending_ = false;
+                publishPosition();
+                if (framePumpTimer_ != nullptr) {
+                    framePumpTimer_->stop();
+                }
+            }
+        }
+        return;
+    }
+
     if (playbackState_ != PlaybackState::Playing) {
         return;
     }
@@ -357,7 +374,7 @@ void PlayerCore::onFramePump() {
 
     if (!pendingVideoFrame_.has_value()) {
         playerlab::core::VideoFrame frame;
-        if (!videoDecoder_.tryPopFrame(frame)) {
+        if (!tryPopCurrentVideoFrame(frame)) {
             publishPosition();
             maybeTransitionToEnded();
             return;
@@ -406,7 +423,7 @@ void PlayerCore::onFramePump() {
             frameTimerSec_ = targetDisplayTimeSec;
             pendingVideoFrame_.reset();
             playerlab::core::VideoFrame nextFrame;
-            if (!videoDecoder_.tryPopFrame(nextFrame)) {
+            if (!tryPopCurrentVideoFrame(nextFrame)) {
                 publishPosition();
                 maybeTransitionToEnded();
                 return;
@@ -433,12 +450,13 @@ void PlayerCore::onAudioPump() {
         return;
     }
 
+    syncActiveSerial();
     audioOutput_->pump();
 
     playerlab::core::AudioFrame frame;
     int frameCount = 0;
     constexpr int kMaxFramesPerTick = 8;
-    while (frameCount < kMaxFramesPerTick && audioDecoder_.tryPopFrame(frame)) {
+    while (frameCount < kMaxFramesPerTick && tryPopCurrentAudioFrame(frame)) {
         if (!firstAudioPtsSec_.has_value()) {
             firstAudioPtsSec_ = frame.ptsSec;
         }
@@ -477,9 +495,10 @@ double PlayerCore::currentPositionSec() const {
 }
 
 bool PlayerCore::isPipelineDrained() const {
-    const bool readDrained = readWorker_.isFinished();
-    const bool videoDrained = readDrained && videoDecoder_.isDrained() && !pendingVideoFrame_.has_value();
-    const bool audioDrained = !hasAudio_ || (readDrained && audioDecoder_.isDrained());
+    const bool readDrained = readWorker_.isEofSerial(activeSerial_);
+    const bool videoDrained =
+        readDrained && videoDecoder_.isDrained(activeSerial_) && !pendingVideoFrame_.has_value();
+    const bool audioDrained = !hasAudio_ || (readDrained && audioDecoder_.isDrained(activeSerial_));
     return videoDrained && audioDrained;
 }
 
@@ -517,10 +536,10 @@ void PlayerCore::maybeLogSyncStats(const double masterClockSec, const double vid
     }
 
     LOG_DEBUG(
-        "AV sync stats(1s): display={} drop={} wait={} late={} master={:.3f}s video={:.3f}s diff={:.1f}ms frameTimer={:.3f}s lastDur={:.3f}s videoQ={} audioQ={}",
+        "AV sync stats(1s): display={} drop={} wait={} late={} master={:.3f}s video={:.3f}s diff={:.1f}ms frameTimer={:.3f}s lastDur={:.3f}s videoQ={} audioQ={} serial={}",
         debugVideoDisplayCount_, debugVideoDropCount_, debugVideoWaitCount_, debugVideoLateCount_, masterClockSec,
         videoPtsSec, (videoPtsSec - masterClockSec) * 1000.0, frameTimerSec_, lastFrameDurationSec_,
-        videoPacketQueue_.size(), audioPacketQueue_.size());
+        videoPacketQueue_.size(), audioPacketQueue_.size(), activeSerial_);
 
     debugVideoDisplayCount_ = 0;
     debugVideoDropCount_ = 0;
@@ -551,20 +570,96 @@ void PlayerCore::resetFrameTimeline() {
     frameWakePending_ = false;
 }
 
+void PlayerCore::resetSeekState(const double targetSec, const int nextSerial, const bool keepPaused) {
+    activeSerial_ = nextSerial;
+    pendingVideoFrame_.reset();
+    resetFrameTimeline();
+    firstAudioPtsSec_.reset();
+    pausedSeekPreviewPending_ = keepPaused;
+
+    playbackClock_.reset(hasAudio_);
+    playbackClock_.setPlaybackRate(playbackRate_);
+    playbackClock_.ensureSystemClockStarted(targetSec);
+
+    if (audioOutput_ != nullptr) {
+        audioOutput_->stop();
+        if (keepPaused) {
+            audioOutput_->pause();
+        }
+    }
+
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("PlayerCore begin seek reset: target={:.3f} serial={} paused={}", targetSec, nextSerial, keepPaused);
+    }
+
+    if (keepPaused) {
+        playbackClock_.onPauseChanged(true);
+        updateState(PlaybackState::Paused);
+        if (framePumpTimer_ != nullptr) {
+            framePumpTimer_->start();
+        }
+        return;
+    }
+
+    updateState(PlaybackState::Playing);
+}
+
+void PlayerCore::syncActiveSerial() {
+    const int workerSerial = readWorker_.currentSerial();
+    if (workerSerial <= activeSerial_) {
+        return;
+    }
+
+    activeSerial_ = workerSerial;
+    pendingVideoFrame_.reset();
+    resetFrameTimeline();
+    firstAudioPtsSec_.reset();
+    if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+        LOG_DEBUG("PlayerCore serial advanced: serial={}", activeSerial_);
+    }
+}
+
+bool PlayerCore::tryPopCurrentVideoFrame(playerlab::core::VideoFrame& outFrame) {
+    playerlab::core::VideoFrame frame;
+    while (videoDecoder_.tryPopFrame(frame)) {
+        if (frame.serial == activeSerial_) {
+            outFrame = std::move(frame);
+            return true;
+        }
+        if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+            LOG_TRACE("Drop obsolete video frame: frameSerial={} activeSerial={} pts={:.3f}", frame.serial,
+                      activeSerial_, frame.ptsSec);
+        }
+    }
+    return false;
+}
+
+bool PlayerCore::tryPopCurrentAudioFrame(playerlab::core::AudioFrame& outFrame) {
+    playerlab::core::AudioFrame frame;
+    while (audioDecoder_.tryPopFrame(frame)) {
+        if (frame.serial == activeSerial_) {
+            outFrame = std::move(frame);
+            return true;
+        }
+        if (playerlab::utils::Logger::isPipelineDebugEnabled()) {
+            LOG_TRACE("Drop obsolete audio frame: frameSerial={} activeSerial={} pts={:.3f}", frame.serial,
+                      activeSerial_, frame.ptsSec);
+        }
+    }
+    return false;
+}
+
 void PlayerCore::clearPacketQueues() {
-    AVPacket* packet = nullptr;
-    while (videoPacketQueue_.tryPop(packet)) {
-        if (packet != nullptr) {
-            av_packet_free(&packet);
+    videoPacketQueue_.clearWith([](playerlab::ffmpeg::QueuedPacket& queuedPacket) {
+        if (queuedPacket.packet != nullptr) {
+            av_packet_free(&queuedPacket.packet);
         }
-    }
-    while (audioPacketQueue_.tryPop(packet)) {
-        if (packet != nullptr) {
-            av_packet_free(&packet);
+    });
+    audioPacketQueue_.clearWith([](playerlab::ffmpeg::QueuedPacket& queuedPacket) {
+        if (queuedPacket.packet != nullptr) {
+            av_packet_free(&queuedPacket.packet);
         }
-    }
-    videoPacketQueue_.clear();
-    audioPacketQueue_.clear();
+    });
 }
 
 }  // namespace playerlab::core
