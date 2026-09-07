@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>PlayerLab · 桌面编辑体验原型</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Three variants of the first desktop editing workspace, switchable via ?variant=, on this throwaway prototype route. -->
+    <main id="prototype-root"></main>
+
+    <aside class="prototype-state" aria-label="原型状态">
+      <button class="prototype-state__toggle" data-action="toggle-state" aria-expanded="true">评审状态</button>
+      <div class="prototype-state__body" id="prototype-state-body"></div>
+    </aside>
+
+    <nav class="prototype-switcher" aria-label="原型方案切换">
+      <button data-action="previous-variant" aria-label="上一个方案">←</button>
+      <div>
+        <span class="prototype-switcher__eyebrow">THROWAWAY PROTOTYPE</span>
+        <strong id="variant-label"></strong>
+      </div>
+      <button data-action="next-variant" aria-label="下一个方案">→</button>
+    </nav>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
+
