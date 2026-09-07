@@ -1,4 +1,4 @@
-# Issue 跟踪器：GitHub
+# Issue tracker: GitHub
 
 本仓库的需求与规格都存放在 GitHub Issues 中。所有操作使用 `gh` CLI 完成。
 
@@ -12,7 +12,9 @@
 - 使用 `gh issue close` 关闭已完成或明确不处理的 Issue。
 - 通过 `git remote -v` 推断当前 GitHub 仓库。
 
-## 是否将 Pull Request 作为分诊入口
+## Pull requests as a triage surface
+
+**PRs as a request surface: no.**
 
 不将 Pull Request 作为需求分诊入口。
 
