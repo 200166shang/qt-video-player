@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PlayerLab 移动端触控边界原型</title>
+  <!-- PROTOTYPE: Three mobile editor structures, switchable via ?variant=A|B|C. Throw away after the decision. -->
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ink: #f7f3eb;
+      --muted: #a7a49d;
+      --panel: #17191d;
+      --panel-2: #22252b;
+      --line: #343840;
+      --accent: #f6c84c;
+      --accent-2: #8ae6c5;
+      --danger: #ff766d;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(246, 200, 76, .13), transparent 28rem),
+        radial-gradient(circle at 85% 70%, rgba(138, 230, 197, .10), transparent 26rem),
+        #0d0f12;
+      color: var(--ink);
+    }
+    button { font: inherit; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .page {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 28px 18px 118px;
+    }
+    .brief {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 6px 0 8px; font-size: clamp(24px, 4vw, 42px); line-height: 1.06; }
+    .brief p { max-width: 720px; margin: 0; color: var(--muted); line-height: 1.55; }
+    .question {
+      max-width: 300px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: #dcd8cf;
+      background: rgba(23, 25, 29, .86);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: minmax(320px, 430px) minmax(260px, 1fr);
+      gap: 30px;
+      align-items: center;
+    }
+    .phone {
+      position: relative;
+      width: min(390px, 100%);
+      height: 760px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 8px solid #25272c;
+      border-radius: 42px;
+      background: #111317;
+      box-shadow: 0 28px 80px rgba(0,0,0,.48), inset 0 0 0 1px #4c5059;
+    }
+    .island { position: absolute; z-index: 20; top: 9px; left: 50%; width: 105px; height: 25px; border-radius: 18px; background: #050607; transform: translateX(-50%); }
+    .app { height: 100%; padding-top: 36px; display: flex; flex-direction: column; }
+    .topbar { height: 46px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+    .topbar strong { font-size: 14px; }
+    .icon, .chip, .tool, .primary, .nav-item, .step, .circle-action {
+      border: 0;
+      color: var(--ink);
+      background: var(--panel-2);
+      cursor: pointer;
+    }
+    .icon { min-width: 34px; height: 34px; border-radius: 11px; }
+    .chip { padding: 7px 11px; border-radius: 999px; font-size: 12px; }
+    .primary { padding: 9px 14px; border-radius: 10px; background: var(--accent); color: #17130a; font-weight: 800; }
+
+    .preview {
+      position: relative;
+      margin: 0 12px;
+      border-radius: 16px;
+      overflow: hidden;
+      background:
+        linear-gradient(155deg, transparent 54%, rgba(0,0,0,.52) 54%),
+        radial-gradient(circle at 70% 27%, #ffe39a 0 7%, transparent 7.4%),
+        linear-gradient(150deg, #415b5e 0 42%, #d69a67 42% 66%, #5b493d 66%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
+    }
+    .preview.landscape { aspect-ratio: 16 / 10; }
+    .preview.portrait { width: 225px; max-height: 390px; aspect-ratio: 9 / 16; margin-inline: auto; }
+    .play { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%,-50%); width: 48px; height: 48px; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; color: white; background: rgba(10,10,12,.56); font-size: 18px; }
+    .caption { position: absolute; left: 12%; right: 12%; bottom: 14%; padding: 5px; text-align: center; color: white; background: rgba(0,0,0,.54); font-weight: 800; font-size: 13px; }
+    .timecode { position: absolute; left: 10px; bottom: 9px; padding: 3px 6px; border-radius: 6px; color: white; background: rgba(0,0,0,.52); font-size: 10px; }
+
+    .inspector {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      background: rgba(23,25,29,.82);
+    }
+    .variant-name { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .variant-name b { font-size: 20px; }
+    .tag { color: #111; background: var(--accent-2); border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 900; }
+    .inspector p, .inspector li { color: var(--muted); line-height: 1.55; }
+    .inspector ul { margin: 12px 0 18px; padding-left: 20px; }
+    .state { border-top: 1px solid var(--line); padding-top: 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #d7d3ca; }
+    .state strong { color: var(--accent-2); }
+
+    /* A — persistent precision timeline */
+    .a .preview { flex: 0 0 auto; }
+    .transport { display: flex; justify-content: center; align-items: center; gap: 18px; height: 58px; }
+    .transport .icon:nth-child(2) { width: 42px; height: 42px; border-radius: 50%; background: var(--ink); color: #111; }
+    .timeline { position: relative; flex: 1; min-height: 250px; padding: 19px 12px 10px 38px; background: #121419; border-top: 1px solid var(--line); overflow: hidden; }
+    .ruler { height: 19px; color: #777d87; font: 9px ui-monospace, monospace; word-spacing: 30px; white-space: nowrap; }
+    .track-label { position: absolute; left: 8px; color: #8f949e; font-size: 9px; writing-mode: vertical-rl; }
+    .track { display: flex; gap: 3px; height: 58px; margin-bottom: 7px; }
+    .clip { display: grid; place-items: end start; min-width: 0; padding: 5px; border: 2px solid transparent; border-radius: 7px; overflow: hidden; color: white; background: linear-gradient(135deg,#694733,#b8794e); font-size: 9px; }
+    .clip.selected { border-color: var(--accent); }
+    .clip.two { background: linear-gradient(135deg,#274a4d,#4d8588); }
+    .clip.three { background: linear-gradient(135deg,#53466f,#9a79bd); }
+    .audio { height: 31px; background: repeating-linear-gradient(90deg,#315c51 0 3px,#234039 3px 7px); }
+    .subs { height: 25px; color: #25220f; background: #c7b75b; }
+    .playhead { position: absolute; z-index: 4; top: 14px; bottom: 0; left: 49%; width: 1px; background: var(--danger); }
+    .playhead::before { content:""; position:absolute; left:-5px; width:11px; height:8px; border-radius:3px; background:var(--danger); }
+    .toolrow { display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; padding: 9px 10px 14px; border-top: 1px solid var(--line); }
+    .tool { padding: 9px 2px; border-radius: 9px; font-size: 10px; }
+
+    /* B — staged story workflow */
+    .b { background: #15130f; }
+    .b .topbar { background: #efe9dc; color: #252019; }
+    .b .topbar .icon { background: #d9d0c0; color: #252019; }
+    .b .preview { margin-top: 10px; }
+    .story-strip { display: flex; gap: 8px; padding: 14px; overflow: hidden; }
+    .story-card { min-width: 92px; height: 74px; padding: 8px; border: 2px solid transparent; border-radius: 13px; color: white; background: linear-gradient(150deg,#684833,#bc8359); text-align: left; font-size: 10px; }
+    .story-card.selected { border-color: var(--accent); }
+    .story-card:nth-child(2) { background: linear-gradient(150deg,#315557,#72a6a5); }
+    .story-card:nth-child(3) { background: linear-gradient(150deg,#574b70,#9478ad); }
+    .drawer { flex: 1; margin: 0 10px 10px; padding: 15px; border-radius: 20px; color: #27221b; background: #f0eade; }
+    .drawer-head { display: flex; align-items: center; justify-content: space-between; }
+    .drawer h3 { margin: 0; font-size: 16px; }
+    .drawer p { margin: 7px 0 12px; color: #776e61; font-size: 11px; }
+    .large-actions { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; }
+    .large-actions button { padding: 15px 8px; border: 0; border-radius: 13px; color: #28221a; background: #dcd2c2; font-weight: 750; }
+    .steps { display: grid; grid-template-columns: repeat(5,1fr); padding: 8px 8px 14px; background: #0e0f12; }
+    .step { padding: 8px 1px; border-radius: 9px; background: transparent; color: #858991; font-size: 9px; }
+    .step.active { color: var(--accent); background: #22242a; }
+
+    /* C — canvas-first direct manipulation */
+    .c { background: #08090b; }
+    .c .topbar { position: absolute; z-index: 9; top: 36px; left: 0; right: 0; background: linear-gradient(#08090bd6,transparent); }
+    .c .preview { flex: 1; width: 100%; max-height: none; margin: 0; border-radius: 0; }
+    .selection-box { position: absolute; left: 12%; right: 12%; bottom: 12%; height: 70px; border: 2px solid var(--accent); }
+    .selection-box i { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    .selection-box i:nth-child(1) { left:-6px; top:-6px; }.selection-box i:nth-child(2) { right:-6px; top:-6px; }
+    .selection-box i:nth-child(3) { left:-6px; bottom:-6px; }.selection-box i:nth-child(4) { right:-6px; bottom:-6px; }
+    .floating-tools { position: absolute; right: 12px; top: 130px; display: grid; gap: 9px; }
+    .circle-action { width: 44px; height: 44px; border-radius: 50%; background: rgba(30,32,37,.9); box-shadow: 0 5px 18px rgba(0,0,0,.35); }
+    .filmstrip { position: absolute; left: 0; right: 0; bottom: 67px; padding: 9px 12px; background: linear-gradient(transparent,#08090b 30%); }
+    .frames { display: flex; height: 62px; gap: 3px; overflow: hidden; }
+    .frame { flex: 1; border-radius: 5px; background: linear-gradient(135deg,#4a3731,#936348); }
+    .frame:nth-child(n+4) { background: linear-gradient(135deg,#284c4d,#689497); }
+    .frame.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .bottom-nav { height: 67px; display: grid; grid-template-columns: repeat(5,1fr); padding: 7px 8px 12px; background: #0a0b0d; }
+    .nav-item { border-radius: 10px; color: #888d96; background: transparent; font-size: 10px; }
+    .nav-item.active { color: var(--accent); background: #22242a; }
+
+    .switcher {
+      position: fixed;
+      z-index: 100;
+      left: 50%;
+      bottom: 22px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid #515660;
+      border-radius: 999px;
+      color: white;
+      background: #15171bea;
+      box-shadow: 0 12px 38px rgba(0,0,0,.5);
+      transform: translateX(-50%);
+      backdrop-filter: blur(14px);
+    }
+    .switcher button { width: 38px; height: 38px; border: 0; border-radius: 50%; color: white; background: #30343b; cursor: pointer; font-size: 18px; }
+    .switch-label { min-width: 190px; text-align: center; font-weight: 800; font-size: 13px; }
+
+    @media (max-width: 760px) {
+      .brief { grid-template-columns: 1fr; }
+      .question { max-width: none; }
+      .stage { grid-template-columns: 1fr; }
+      .inspector { order: -1; }
+      .phone { height: min(760px, calc(100vh - 170px)); min-height: 620px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="brief">
+      <div>
+        <div class="eyebrow">Throwaway prototype · Issue 10</div>
+        <h1>触控编辑的边界在哪里？</h1>
+        <p>三个结构故意走向不同极端。它们只比较信息层级与主要操作方式，不决定视觉风格，也不代表生产代码。</p>
+      </div>
+      <aside class="question">观察重点：复杂编辑是否必须始终看见精确时间线？高频任务是否应按步骤组织？画布直接操作应该承担多少职责？</aside>
+    </section>
+    <section id="mount"></section>
+  </main>
+
+  <nav class="switcher" aria-label="原型变体切换">
+    <button id="prev" aria-label="上一个变体">←</button>
+    <div class="switch-label" id="switchLabel"></div>
+    <button id="next" aria-label="下一个变体">→</button>
+  </nav>
+
+  <script>
+    const variants = ['A', 'B', 'C'];
+    const meta = {
+      A: { name: '时间线优先', state: '主视图 = 预览 + 常驻多轨时间线', summary: '把桌面编辑模型压缩到触屏。精度最强，但小屏密度和手势冲突最高。' },
+      B: { name: '故事步骤优先', state: '主视图 = 预览 + 故事卡片；时间线按需展开', summary: '按素材、剪辑、音乐、文字、导出分阶段，复杂操作进入上下文抽屉。' },
+      C: { name: '画布直接操作', state: '主视图 = 全屏画布；片段条与工具悬浮', summary: '让作品占据屏幕，把操作放在对象周围。直觉强，但精确时序能力最弱。' }
+    };
+
+    const topbar = (title, action = '导出') => `
+      <div class="topbar"><button class="icon" data-action="返回">‹</button><strong>${title}</strong><button class="primary" data-action="${action}">${action}</button></div>`;
+    const preview = (portrait = false, selected = false) => `
+      <div class="preview ${portrait ? 'portrait' : 'landscape'}">
+        <button class="play" data-action="播放或暂停">▶</button>
+        <div class="caption">今天，从海边出发</div>
+        <div class="timecode">00:07.24 / 00:26.10</div>
+        ${selected ? '<div class="selection-box"><i></i><i></i><i></i><i></i></div>' : ''}
+      </div>`;
+
+    function VariantA() {
+      return `
+        <div class="stage">
+          <div class="phone"><div class="island"></div><div class="app a">
+            ${topbar('旅行短片')}${preview(false)}
+            <div class="transport"><button class="icon" data-action="撤销">↶</button><button class="icon" data-action="播放">▶</button><button class="icon" data-action="重做">↷</button></div>
+            <div class="timeline">
+              <div class="ruler">00:00 00:05 00:10 00:15</div><span class="track-label" style="top:45px">主故事线</span>
+              <div class="track"><button class="clip selected" style="flex:1.2" data-action="选择山路片段">山路</button><button class="clip two" style="flex:.8" data-action="选择海边片段">海边</button><button class="clip three" style="flex:1.1" data-action="选择日落片段">日落</button></div>
+              <span class="track-label" style="top:109px">音乐</span><div class="track audio"></div>
+              <span class="track-label" style="top:148px">字幕</span><div class="track subs">今天，从海边出发</div><div class="playhead"></div>
+            </div>
+            <div class="toolrow"><button class="tool" data-action="裁剪">裁剪</button><button class="tool" data-action="分割">分割</button><button class="tool" data-action="删除">删除</button><button class="tool" data-action="排序">排序</button><button class="tool" data-action="更多工具">更多</button></div>
+          </div></div>${Inspector('A')}
+        </div>`;
+    }
+
+    function VariantB() {
+      return `
+        <div class="stage">
+          <div class="phone"><div class="island"></div><div class="app b">
+            ${topbar('剪辑 · 旅行短片', '预览')}${preview(false)}
+            <div class="story-strip"><button class="story-card selected" data-action="选择第一个故事卡片">1 山路<br>8.2 秒</button><button class="story-card" data-action="选择第二个故事卡片">2 海边<br>6.8 秒</button><button class="story-card" data-action="选择第三个故事卡片">3 日落<br>11.1 秒</button></div>
+            <div class="drawer"><div class="drawer-head"><h3>山路片段</h3><button class="chip" data-action="打开精确时间线">精确时间线</button></div><p>点选一个动作；需要逐帧定位时再进入全屏时间线。</p><div class="large-actions"><button data-action="裁剪片段">✂ 裁剪</button><button data-action="分割片段">│ 分割</button><button data-action="替换片段">▣ 替换</button><button data-action="删除片段">⌫ 删除</button></div></div>
+            <div class="steps"><button class="step">素材</button><button class="step active">剪辑</button><button class="step">音乐</button><button class="step">文字</button><button class="step">导出</button></div>
+          </div></div>${Inspector('B')}
+        </div>`;
+    }
+
+    function VariantC() {
+      return `
+        <div class="stage">
+          <div class="phone"><div class="island"></div><div class="app c">
+            ${topbar('旅行短片')}${preview(true, true)}
+            <div class="floating-tools"><button class="circle-action" data-action="编辑文字">字</button><button class="circle-action" data-action="调整画面">裁</button><button class="circle-action" data-action="调整声音">声</button><button class="circle-action" data-action="删除对象">⌫</button></div>
+            <div class="filmstrip"><div class="frames"><button class="frame selected" data-action="选择山路帧"></button><button class="frame"></button><button class="frame"></button><button class="frame"></button><button class="frame"></button><button class="frame"></button></div></div>
+            <div class="bottom-nav"><button class="nav-item active">片段</button><button class="nav-item">音乐</button><button class="nav-item">文字</button><button class="nav-item">画幅</button><button class="nav-item">更多</button></div>
+          </div></div>${Inspector('C')}
+        </div>`;
+    }
+
+    function Inspector(key) {
+      const m = meta[key];
+      const bullets = {
+        A: ['所有轨道一直可见', '捏合缩放与拖动承担精确编辑', '桌面概念迁移成本最低'],
+        B: ['高频任务按阶段出现', '单指点按、拖拽为主', '精确时间线是按需工具，不是首页'],
+        C: ['预览画布占据绝对中心', '文字与构图直接在画布操作', '时序编辑退化为底部胶片条']
+      }[key];
+      return `<aside class="inspector"><div class="variant-name"><span class="tag">${key}</span><b>${m.name}</b></div><p>${m.summary}</p><ul>${bullets.map(x => `<li>${x}</li>`).join('')}</ul><div class="state"><strong>当前结构</strong><br>${m.state}<br><br><strong>最近动作</strong><br><span id="lastAction">尚未操作</span></div></aside>`;
+    }
+
+    function currentVariant() {
+      const value = new URLSearchParams(location.search).get('variant')?.toUpperCase();
+      return variants.includes(value) ? value : 'A';
+    }
+    function show(key) {
+      history.replaceState({}, '', `${location.pathname}?variant=${key}${location.hash}`);
+      document.getElementById('mount').innerHTML = ({ A: VariantA, B: VariantB, C: VariantC })[key]();
+      document.getElementById('switchLabel').textContent = `${key} · ${meta[key].name}`;
+      document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => {
+        document.getElementById('lastAction').textContent = button.dataset.action;
+      }));
+    }
+    function cycle(delta) {
+      const index = variants.indexOf(currentVariant());
+      show(variants[(index + delta + variants.length) % variants.length]);
+    }
+    document.getElementById('prev').addEventListener('click', () => cycle(-1));
+    document.getElementById('next').addEventListener('click', () => cycle(1));
+    window.addEventListener('keydown', event => {
+      if (['INPUT','TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
+      if (event.key === 'ArrowLeft') cycle(-1);
+      if (event.key === 'ArrowRight') cycle(1);
+    });
+    show(currentVariant());
+  </script>
+</body>
+</html>
